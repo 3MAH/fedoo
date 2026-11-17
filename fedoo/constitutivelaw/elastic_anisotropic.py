@@ -4,9 +4,9 @@
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.core.time_evolution import FIRST_ORDER
-from fedoo.core.base import InvalidKinematicStateError
 from .thermal_prop import ThermalProperties
 from ._thermal import (
+    check_absolute_temperature,
     conductivity_tensor,
     thermal_fields,
     initialize_thermal_state,
@@ -92,9 +92,13 @@ class ElasticAnisotropic(Mechanical3D):
         """Attach ThermalProperties, or construct them from keyword arguments.
 
         Call before constructing the weakforms. Returns this material, so it
-        can be used fluently. Coupled solids support small and finite strain
-        in 3D and plane strain. Finite thermoelasticity uses a reference Hencky
-        energy with TL heat integration and requires Simcoon 2.2 conversions.
+        can be used fluently. The density of the thermal properties becomes
+        the density of the material (inertia and heat capacity); a different
+        density given beforehand to the material raises ``ValueError``.
+        Attaching new thermal properties replaces the previous ones, density
+        included. Coupled solids support small and finite strain in 3D and
+        plane strain. Finite thermoelasticity uses a reference Hencky energy
+        with TL heat integration.
         """
         if thermal is None:
             thermal = ThermalProperties(**properties)
@@ -114,9 +118,40 @@ class ElasticAnisotropic(Mechanical3D):
             raise ValueError(
                 "Coupled thermal properties require scalar specific_heat>0 and density>0."
             )
+        if getattr(self, "thermal", None) is None and self.density is not None:
+            # a density given to the mechanical law before the coupling
+            self._check_single_density(self.density, thermal)
         self.thermal = thermal
         self.density = thermal.density
         return self
+
+    @staticmethod
+    def _check_single_density(density, thermal):
+        if not np.array_equal(density, thermal.density):
+            raise ValueError(
+                "A coupled material has a single density, the one of its "
+                "thermal properties: attach ThermalProperties with the new "
+                "density (set_thermal_properties) to change it."
+            )
+
+    def set_density(self, density):
+        """Set the mass density, shared by the inertia and the heat capacity.
+
+        With thermal properties attached, the density is the one of the
+        thermal properties: a different value raises ``ValueError``.
+
+        Parameters
+        ----------
+        density : float
+            Mass density.
+
+        Returns
+        -------
+        self, so that the call can be chained.
+        """
+        if self.thermal is not None:
+            self._check_single_density(density, self.thermal)
+        return super().set_density(density)
 
     def set_start(self, assembly, pb):
         if self.is_thermomechanical:
@@ -220,10 +255,7 @@ class ElasticAnisotropic(Mechanical3D):
         F, _, _ = deformation_gradient(assembly)
         h = sim.Log_strain(np.asfortranarray(F.transpose(1, 0, 2)), True, False)
         _, temperature = thermal_fields(self, assembly, pb)
-        if np.any(~np.isfinite(temperature)) or np.any(temperature <= 0):
-            raise InvalidKinematicStateError(
-                "Finite thermoelasticity requires positive absolute temperatures."
-            )
+        check_absolute_temperature(temperature)
         # Material coefficients refer to the initial axes, also with UL
         # mechanics. Do not convect the reference elasticity tensor.
         reference = copy(assembly)

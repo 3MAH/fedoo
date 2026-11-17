@@ -484,3 +484,127 @@ def test_thermal_elasticity_preserves_spatially_varying_moduli():
         -10 * beta_unit[:, None] * E_gp,
         atol=1e-10,
     )
+
+
+def test_coupled_material_split_over_two_assemblies_is_refused():
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=2, elm_type="quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(
+        100,
+        0.2,
+        thermal=fd.constitutivelaw.ThermalProperties(
+            1, 2, 1, alpha=0.001, reference_temperature=300
+        ),
+    )
+    # The heat assembly would read a frozen strain: no thermoelastic source.
+    assembly = fd.Assembly.create(
+        fd.weakform.StressEquilibrium(material), mesh
+    ) + fd.Assembly.create(fd.weakform.HeatEquation(material), mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+    pb.set_dof("Temp", 300.0)
+    with pytest.raises(ValueError, match="separate assemblies"):
+        pb.initialize()
+
+
+def test_coupled_material_shared_by_mechanical_assemblies_is_accepted():
+    # mechanics only, at the reference temperature: nothing is split
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=2, elm_type="quad4")
+    material = fd.constitutivelaw.ElasticIsotrop(
+        100,
+        0.2,
+        thermal=fd.constitutivelaw.ThermalProperties(
+            1, 2, 1, alpha=0.001, reference_temperature=300
+        ),
+    )
+    assembly = fd.Assembly.create(
+        fd.weakform.StressEquilibrium(material), mesh
+    ) + fd.Assembly.create(fd.weakform.StressEquilibrium(material), mesh)
+    fd.problem.NonLinear(assembly).initialize()
+
+
+@pytest.mark.parametrize("separate", [False, True])
+def test_heat_and_mechanics_with_different_materials_warn_and_run(separate):
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=2, elm_type="quad4")
+    mechanical = fd.weakform.StressEquilibrium(
+        fd.constitutivelaw.ElasticIsotrop(100, 0.2)
+    )
+    heat = fd.weakform.HeatEquation(fd.constitutivelaw.ThermalProperties(1, 2, 1))
+    if separate:
+        assembly = fd.Assembly.create(mechanical, mesh) + fd.Assembly.create(heat, mesh)
+    else:
+        assembly = fd.Assembly.create(mechanical + heat, mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_solver("direct_scipy")
+    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+    pb.set_dof("Temp", 300.0)
+    left, right = mesh.find_nodes("X", 0), mesh.find_nodes("X", 1)
+    pb.bc.add("Dirichlet", left, "Disp", 0)
+    pb.bc.add("Dirichlet", right, "DispX", 0.01)
+    with pytest.warns(UserWarning, match="without thermo-mechanical coupling"):
+        pb.nlsolve(dt=0.1, tmax=0.1, update_dt=False, print_info=0)
+    np.testing.assert_allclose(pb.get_temp(), 300.0)
+
+
+@pytest.mark.parametrize("temperature", [{"atol": 1e-9}, {"rtol": 1e-8}])
+def test_field_reference_excludes_the_residual_of_unloaded_dofs(temperature):
+    pb, _, _ = _model()
+    left, right = pb.mesh.find_nodes("X", 0), pb.mesh.find_nodes("X", 1)
+    pb.bc.add("Dirichlet", left, "Disp", 0)
+    pb.bc.add("Dirichlet", right, "DispX", 0.01)
+    # Disp is scaled by its reactions. Adiabatic Temp has no reaction and no
+    # load: its reference is zero, not its own residual.
+    pb.set_nr_criterion("Fields", fields={"Disp": {"rtol": 1e-8}, "Temp": temperature})
+    if "atol" in temperature:
+        pb.nlsolve(dt=0.05, tmax=0.1, update_dt=False, print_info=0)
+        assert pb.nr_errors["Temp"] < 1 and pb.get_temp().max() < 300
+    else:
+        with pytest.raises(ValueError, match="give it an atol"):
+            pb.nlsolve(dt=0.05, tmax=0.1, update_dt=False, print_info=0)
+
+
+def test_nonpositive_temperature_is_a_model_error_then_a_recoverable_state():
+    from fedoo.core.base import InvalidKinematicStateError
+
+    def simcoon_model():
+        material = fd.constitutivelaw.SimcoonThermoMechanical(
+            "ELISO", [1, 2, 100, 0.2, 0.001], 1, reference_temperature=300
+        )
+        return _model(material)
+
+    pb, assembly, material = simcoon_model()
+    pb.set_dof("Temp", 0.0)  # forgotten initial temperature
+    with pytest.raises(ValueError, match="initial Temp"):
+        pb.initialize()
+
+    pb, assembly, material = simcoon_model()
+    pb.initialize()
+    pb.dtime = 0.1
+    pb.set_start()
+    overshoot = pb._new_vect_dof()
+    pb._set_vect_component(overshoot, "Temp", -400.0)
+    pb._dU = overshoot  # Newton iterate below absolute zero
+    with pytest.raises(InvalidKinematicStateError):
+        material.update(assembly, pb)
+
+
+def test_coupled_material_has_a_single_density():
+    thermal = fd.constitutivelaw.ThermalProperties(1, 2, 3)
+    material = fd.constitutivelaw.ElasticIsotrop(100, 0.2).set_density(5)
+    with pytest.raises(ValueError, match="density"):
+        material.set_thermal_properties(thermal)
+    material = fd.constitutivelaw.ElasticIsotrop(100, 0.2, thermal=thermal)
+    with pytest.raises(ValueError, match="density"):
+        material.set_density(5)
+    assert material.set_density(3).density == 3
+    # new thermal properties replace the previous ones, density included
+    replaced = fd.constitutivelaw.ThermalProperties(1, 2, 5)
+    assert material.set_thermal_properties(replaced).density == 5
+    simcoon_material = fd.constitutivelaw.SimcoonThermoMechanical(
+        "ELISO", [3, 2, 100, 0.2, 0.001], 1
+    )
+    with pytest.raises(ValueError, match="density"):
+        simcoon_material.set_density(5)
+    assert simcoon_material.set_density(3).density == 3

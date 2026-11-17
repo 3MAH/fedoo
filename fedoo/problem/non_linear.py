@@ -646,7 +646,13 @@ class NonLinear(Problem):
             return 0
         if self.nr_parameters["criterion"] == "Fields":
             residual = self._get_free_dof_residual()
-            force = self.get_ext_forces(include_mpc=False)
+            # Reference flux: reactions on the constrained DOFs and applied
+            # loads on the free ones. The balance returned by get_ext_forces
+            # holds the residual itself on unloaded free DOFs, which would
+            # make a relative tolerance unreachable.
+            force = np.array(self.get_ext_forces(include_mpc=False), dtype=float)
+            applied = self.get_B()
+            force[dof_free] = 0 if np.isscalar(applied) else applied[dof_free]
             covered = np.zeros(len(dof_free), dtype=bool)
             labels = (
                 np.full(self.n_dof, -1, dtype=np.int32)
@@ -679,9 +685,13 @@ class NonLinear(Problem):
                     if np.any(selected)
                     else 0.0
                 )
-                errors[field] = (
-                    value / threshold if threshold else (0 if value == 0 else np.inf)
-                )
+                if threshold == 0 and value != 0:
+                    raise ValueError(
+                        f"Field '{field}' has a zero reference (no reaction nor "
+                        "nodal load) to scale its relative tolerance: give it "
+                        "an atol or a reference."
+                    )
+                errors[field] = value / threshold if threshold else 0.0
             if not np.all(covered):
                 raise ValueError(
                     "Convergence fields must cover every free DOF, including global DOFs."
@@ -776,7 +786,15 @@ class NonLinear(Problem):
               'reference'. All free DOFs must be covered without overlaps.
               The residual threshold for each field is atol + rtol*reference;
               Fields converges when all normalized errors are below one.
-              Scalar tol/tol_nr does not change this residual threshold.
+              atol and rtol default to 0 and at least one must be positive.
+              reference defaults to the norm of the reactions and applied
+              loads of the field, recomputed at each iteration. It vanishes
+              for an unloaded field (e.g. adiabatic temperature): such a
+              field needs an atol, rtol alone raises ValueError.
+              The errors of each field are stored in pb.nr_errors.
+              Scalar tol/tol_nr does not change this residual threshold; it
+              still bounds the residual of nonlinear constraints such as
+              MeanMotion (10*tol).
             * 'err0': float or None, default = None.
               The reference error.
               If None (default), err0 is automatically computed. For Force,

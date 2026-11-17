@@ -235,7 +235,8 @@ def test_rigid_rotation_preserves_thermal_history(formulation):
     )
 
 
-def test_heat_only_problem_uses_prescribed_deformation_and_reference_capacity():
+@pytest.mark.parametrize("nlgeom", ["TL", None])
+def test_heat_only_problem_uses_prescribed_deformation_and_reference_capacity(nlgeom):
     F = np.array([[1.4, 0.2, 0], [0, 0.8, 0], [0, 0, 1.1]])
     k = np.diag([1.2, 0.8, 0.6])
     inverse = np.linalg.inv(F)
@@ -245,7 +246,7 @@ def test_heat_only_problem_uses_prescribed_deformation_and_reference_capacity():
         fd.ModelingSpace("3D")
         mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
         material = fd.constitutivelaw.ThermalProperties(conductivity, 2, 1)
-        heat = fd.weakform.HeatEquation(material, nlgeom="TL" if finite else False)
+        heat = fd.weakform.HeatEquation(material, nlgeom=nlgeom if finite else False)
         heat.storage.assembly_options["mat_lumping"] = False
         assembly = fd.Assembly.create(heat, mesh)
         if finite:
@@ -282,3 +283,38 @@ def test_simcoon_umat_t_still_rejects_finite_strain():
     pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
     with pytest.raises(NotImplementedError, match="Simcoon.*small strain"):
         pb.initialize()
+
+
+def test_zero_initial_temperature_is_a_model_error_in_finite_strain():
+    pb, _, _ = _model()
+    pb.set_dof("Temp", 0)
+    with pytest.raises(ValueError, match="initial Temp"):
+        pb.initialize()
+
+
+@pytest.mark.parametrize("formulation", ["TL", "UL"])
+def test_uncoupled_heat_equation_keeps_its_form_next_to_finite_strain(formulation):
+    fd.ModelingSpace("2Dplane")
+    mesh = fd.mesh.rectangle_mesh(nx=3, ny=2, elm_type="quad4")
+    mechanical = fd.weakform.StressEquilibrium(
+        fd.constitutivelaw.ElasticIsotrop(100, 0.2), nlgeom=formulation
+    )
+    # Point-wise conductivity: only the undeformed form accepts it.
+    k = 1.0 + np.zeros(mesh.n_elements * 4)
+    conductivity = [[k, 0, 0], [0, k, 0], [0, 0, k]]
+    heat = fd.weakform.HeatEquation(
+        fd.constitutivelaw.ThermalProperties(conductivity, 2, 1)
+    )
+    assembly = fd.Assembly.create(mechanical + heat, mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_solver("direct_scipy")
+    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+    pb.set_dof("Temp", 300)
+    left, right = mesh.find_nodes("X", 0), mesh.find_nodes("X", 1)
+    pb.bc.add("Dirichlet", left, "Disp", 0)
+    pb.bc.add("Dirichlet", right, "DispX", 0.05)
+    with pytest.warns(UserWarning, match="without thermo-mechanical coupling"):
+        pb.nlsolve(dt=0.5, tmax=1, update_dt=False, print_info=0)
+    leaves = list(assembly.iter_leaf())
+    assert all("ReferenceHeatFlux" not in leaf.sv for leaf in leaves)
+    np.testing.assert_allclose(pb.get_temp(), 300)

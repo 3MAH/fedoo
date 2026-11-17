@@ -1,3 +1,5 @@
+import warnings
+
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.time_evolution import FIRST_ORDER
 from fedoo.core.weakform import WeakFormBase
@@ -10,10 +12,61 @@ from ._reference import (
 from fedoo.constitutivelaw._thermal import conductivity_tensor
 
 
-def _finite_heat(assembly, pb, nlgeom):
+def _finite_heat(assembly, pb, nlgeom, material):
     if nlgeom is not None:
         return bool(nlgeom)
-    return bool(getattr(assembly, "_nlgeom", False) or pb.nlgeom or "F" in assembly.sv)
+    if getattr(material, "is_thermomechanical", False):
+        return bool(
+            getattr(assembly, "_nlgeom", False) or pb.nlgeom or "F" in assembly.sv
+        )
+    # Only a coupled material follows the mechanical geometry by default: an
+    # uncoupled heat equation keeps its formulation next to finite strain, and
+    # uses the reference form only for a deformation gradient prescribed to a
+    # heat-only assembly.
+    return "F" in assembly.sv and "DispX" not in assembly.space.list_variables()
+
+
+def _check_coupling(material, assembly, pb):
+    """Check the mechanics found on the mesh of a heat equation.
+
+    The strain, the deformation gradient and the temperature are exchanged
+    through the state variables of one assembly. The same material in a
+    mechanical equilibrium assembled apart would read a frozen temperature
+    and the heat equation a frozen strain: this is refused. A different
+    material is a legitimate uncoupled model, reported by a warning.
+    """
+    from .stress_equilibrium import StressEquilibrium
+
+    top = getattr(pb, "assembly", None)
+    if top is None:
+        return
+    uncoupled = False
+    for leaf in top.iter_leaf():
+        weakform = getattr(leaf, "weakform", None)
+        if weakform is None or leaf.mesh is not assembly.mesh:
+            continue
+        for wf in weakform.iter_leaf():
+            if not isinstance(wf, StressEquilibrium):
+                continue
+            if wf.constitutivelaw is not material:
+                uncoupled = True
+            elif leaf is not assembly:
+                raise ValueError(
+                    "A thermo-mechanical material is used by separate assemblies: "
+                    "the coupling terms would be lost. Sum the weak forms before "
+                    "creating the assembly: "
+                    "Assembly.create(StressEquilibrium(material) + "
+                    "HeatEquation(material), mesh)."
+                )
+    if uncoupled:
+        warnings.warn(
+            "HeatEquation and StressEquilibrium use different materials: "
+            "the heat equation is solved without thermo-mechanical "
+            "coupling terms. Give both weak forms the same "
+            "thermo-mechanical material to couple them.",
+            UserWarning,
+            stacklevel=2,
+        )
 
 
 class HeatEquation(WeakFormBase):
@@ -31,9 +84,34 @@ class HeatEquation(WeakFormBase):
     name: str, optional
         Name of the weak form. An empty name leaves it unregistered.
     nlgeom: None, bool or 'TL', optional
-        None follows the mechanical geometry (or a supplied F field).
-        True/'TL' uses reference integration with J F^-1 k F^-T; this also
-        works with UL mechanics. False keeps the undeformed heat equation.
+        Geometry used to integrate the heat equation.
+
+        * None (default): a thermo-mechanical material follows the mechanical
+          geometry, i.e. the reference-configuration form below is used as
+          soon as the mechanics is in finite strain (or an ``F`` field is
+          supplied in ``assembly.sv``). An uncoupled thermal material keeps
+          the heat equation of the small-strain case, also next to
+          finite-strain mechanics: it is integrated on the configuration of
+          the assembly (reference with TL mechanics, current with UL
+          mechanics in the same assembly, so the two differ by the volume
+          change). It uses the reference-configuration form only in a
+          heat-only assembly given an ``F`` field.
+        * True or 'TL': reference integration with the pulled-back
+          conductivity :math:`J \\mathbf{F}^{-1} \\mathbf{k}
+          \\mathbf{F}^{-T}`, a consistent capacity and a nonsymmetric
+          assembly. Also works with UL mechanics. The conductivity must be a
+          constant scalar or :math:`3 \\times 3` tensor.
+        * False: undeformed heat equation.
+
+    Notes
+    -----
+    To couple heat and mechanics, give the same thermo-mechanical material to
+    :py:class:`fedoo.weakform.StressEquilibrium` and to this weak form, and
+    sum the two weak forms before creating the assembly:
+    ``fd.Assembly.create(equilibrium + heat, mesh)``. The same material in
+    two assemblies created separately raises ``ValueError``, since the
+    coupling terms would be lost. With two different materials the problem is
+    solved without coupling terms and a ``UserWarning`` is emitted.
     """
 
     def __init__(self, thermal_constitutivelaw, name="", nlgeom=None, space=None):
@@ -68,7 +146,9 @@ class HeatEquation(WeakFormBase):
             raise ValueError(
                 "HeatEquation uses nlgeom='TL' (or True) for finite strain."
             )
-        if getattr(thermal_constitutivelaw, "is_thermomechanical", False):
+        if nlgeom or getattr(thermal_constitutivelaw, "is_thermomechanical", False):
+            # the deformation tangent of the pulled-back conductivity and the
+            # coupling blocks are not symmetric
             self.assembly_options["assume_sym"] = False
         self.time_evolution = FIRST_ORDER
         self.__nlgeom = nlgeom
@@ -89,6 +169,7 @@ class HeatEquation(WeakFormBase):
         # self.__nlgeom = nlgeom #geometric non linearities
 
     def initialize(self, assembly, pb):
+        _check_coupling(self.constitutivelaw, assembly, pb)
         assembly._thermal_nlgeom = self.nlgeom
         if not hasattr(assembly, "_nlgeom"):
             assembly._nlgeom = False
@@ -96,7 +177,9 @@ class HeatEquation(WeakFormBase):
             assembly.sv["F"] = np.repeat(
                 np.eye(3)[:, :, None], assembly.n_gauss_points, axis=2
             )
-        if self.storage is not None and _finite_heat(assembly, pb, self.nlgeom):
+        if self.storage is not None and _finite_heat(
+            assembly, pb, self.nlgeom, self.constitutivelaw
+        ):
             self.storage.assembly_options["mat_lumping"] = False
         if getattr(self.constitutivelaw, "thermal_storage", None) == "included":
             if FIRST_ORDER not in pb.time_integrators:
@@ -122,7 +205,7 @@ class HeatEquation(WeakFormBase):
         ]
 
     def get_weak_equation(self, assembly, pb):
-        if _finite_heat(assembly, pb, self.nlgeom):
+        if _finite_heat(assembly, pb, self.nlgeom, self.constitutivelaw):
             return self._get_reference_equation(assembly, pb)
         K = self.constitutivelaw.thermal_conductivity
 
@@ -235,6 +318,7 @@ class HeatEquation(WeakFormBase):
 
     @property
     def nlgeom(self):
+        """Geometry option given at construction (None, False, True or 'TL')."""
         return self.__nlgeom
 
 
@@ -243,6 +327,19 @@ class HeatCapacity(WeakFormBase):
 
     This weakform only defines the capacity operator ``rho*c``. Time
     discretization is handled by problem-level time integrators.
+
+    Parameters
+    ----------
+    thermal_constitutivelaw: ConstitutiveLaw name (str) or ConstitutiveLaw object
+        Material providing ``density`` and ``specific_heat``.
+    name: str, optional
+        Name of the weak form. An empty name leaves it unregistered.
+    nlgeom: None, bool or 'TL', optional
+        Same meaning as in :py:class:`fedoo.weakform.HeatEquation`: when the
+        reference-configuration form is active, the capacity is integrated
+        over the reference volume with the reference density.
+    space: ModelingSpace, optional
+        Modeling space used to build the weak form. Default to active one.
     """
 
     def __init__(self, thermal_constitutivelaw, name="", nlgeom=None, space=None):
@@ -272,7 +369,7 @@ class HeatCapacity(WeakFormBase):
 
     def get_weak_equation(self, assembly, pb):
         rho_c = self.constitutivelaw.density * self.constitutivelaw.specific_heat
-        if _finite_heat(assembly, pb, self.nlgeom):
+        if _finite_heat(assembly, pb, self.nlgeom, self.constitutivelaw):
             rho_c *= reference_volume_weight(assembly)
 
         op_temp = self.space.variable(
@@ -285,10 +382,11 @@ class HeatCapacity(WeakFormBase):
 
     def get_weak_equation_for_value(self, assembly, pb, value):
         rho_c = self.constitutivelaw.density * self.constitutivelaw.specific_heat
-        if _finite_heat(assembly, pb, self.nlgeom):
+        if _finite_heat(assembly, pb, self.nlgeom, self.constitutivelaw):
             rho_c *= reference_volume_weight(assembly)
         return rho_c * self.space.variable("Temp").virtual * value
 
     @property
     def nlgeom(self):
+        """Geometry option given at construction (None, False, True or 'TL')."""
         return self.__nlgeom

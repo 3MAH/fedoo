@@ -8,6 +8,7 @@ from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.core.base import InvalidKinematicStateError
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from ._thermal import (
+    check_absolute_temperature,
     conductivity_tensor,
     thermal_fields,
     initialize_thermal_state,
@@ -28,6 +29,11 @@ class SimcoonThermoMechanical(Mechanical3D):
     second HeatCapacity term. Attach FIRST_ORDER/BackwardEuler to declare the
     transient thermal problem; umat_T owns this local discretization. The
     kernel's derivatives are used as supplied (some are continuum tangents).
+
+    Temperatures are necessarily absolute temperatures in kelvin (never
+    degrees Celsius) and must stay strictly positive: set the initial field
+    with ``pb.set_dof("Temp", T0)`` before solving. ``reference_temperature``
+    is in kelvin as well.
     """
 
     is_isotropic = True
@@ -101,6 +107,15 @@ class SimcoonThermoMechanical(Mechanical3D):
         self.thermal_conductivity = conductivity_tensor(thermal_conductivity)
         self.specific_heat = props[1]
 
+    def set_density(self, density):
+        """Refuse a density that differs from ``props[0]``, read by ``umat_T``."""
+        if not np.array_equal(density, self.props[0, 0]):
+            raise ValueError(
+                "The density of a Simcoon thermo-mechanical material is its "
+                "first property (props[0]), also used by umat_T."
+            )
+        return super().set_density(density)
+
     def get_tangent_matrix(self, assembly, dimension=None):
         return assembly.sv["TangentMatrix"]
 
@@ -110,10 +125,7 @@ class SimcoonThermoMechanical(Mechanical3D):
         strain, temperature = thermal_fields(self, assembly, pb)
         assembly.sv["Strain"] = StrainTensorList(strain)
         assembly.sv["Temp"] = temperature
-        if np.any(temperature <= 0):
-            raise ValueError(
-                "umat_T requires positive absolute temperatures; set the initial Temp field."
-            )
+        check_absolute_temperature(temperature, initial=start)
         n = assembly.n_gauss_points
         if committed is None:
             committed = assembly.sv if start else assembly.sv_start
@@ -151,6 +163,12 @@ class SimcoonThermoMechanical(Mechanical3D):
         except sim.StepCut as exc:
             raise InvalidKinematicStateError(str(exc)) from exc
         stress, statev, wm, wt, source, C, dsdT, drde, drdT = response
+        if not start and pb.dtime > 0:
+            # umat_T returns the heat of the increment (dtime times the
+            # source, Simcoon >= 2.3); HeatEquation integrates a rate.
+            source = np.asarray(source) / pb.dtime
+            drde = np.asarray(drde) / pb.dtime
+            drdT = np.asarray(drdT) / pb.dtime
         assembly.sv.update(
             Stress=StressTensorList(stress),
             Statev=statev,

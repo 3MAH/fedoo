@@ -20,6 +20,23 @@ and thermal weakforms with the **same material instance**::
         "Temp": {"atol": 1e-6, "rtol": 1e-8},
     })
 
+Mechanics and heat must be assembled together: call ``fd.Assembly.create`` on
+the summed weak form. The same coupled material in two assemblies created
+separately and then added raises ``ValueError``, because the two assemblies do
+not share the Gauss-point state and the coupling terms would be lost. Heat and
+mechanics with two different materials (a Simcoon mechanical law and plain
+``ThermalProperties`` for instance) remain possible: the problem is then
+solved without coupling terms and a ``UserWarning`` says so.
+
+With thermo-mechanical coupling, the temperature field and
+``reference_temperature`` are necessarily absolute temperatures in kelvin,
+never degrees Celsius: the thermoelastic heat source is proportional to the
+absolute temperature. They must stay strictly positive with
+``SimcoonThermoMechanical`` and in finite strain: set the initial field with
+``pb.set_dof("Temp", T0)``. A nonpositive initial temperature raises
+``ValueError``; a nonpositive Newton iterate is a failed increment and the time
+step is reduced.
+
 Add mechanical and thermal boundary conditions, then call ``pb.nlsolve``.
 See ``examples/thermal/thermomechanical_monolithic.py`` for a complete example,
 including an optional FDH5 output and a Simcoon variant.
@@ -44,8 +61,9 @@ Or pass the ``ThermalProperties`` constructor keywords directly::
     )
 
 Attaching thermal properties also supplies the density used for mechanical
-inertia. Unattached elastic laws retain their mechanical behavior, including
-their existing finite-strain support.
+inertia: a coupled material has a single density, and a different value given
+through ``set_density`` raises ``ValueError``. Unattached elastic laws retain
+their mechanical behavior, including their existing finite-strain support.
 
 Thermal properties enable thermal expansion and reversible mechanical feedback
 into heat, linearized around ``reference_temperature``. Specific heat is the
@@ -54,7 +72,7 @@ or a symmetric positive-semidefinite 3x3 tensor in current global axes. ``alpha`
 a scalar for isotropic expansion, three normal coefficients, or six engineering
 strain coefficients; these use the initial global axes. Capacity and density are
 positive constant scalars. Spatially varying native elastic moduli remain
-supported. Temperatures should be absolute for physical thermal feedback.
+supported. Temperatures must be in kelvin for the thermal feedback.
 
 With ``thermal.coupling=False``, only thermal expansion remains active. The material can
 also be used with a mechanical weakform alone and a prescribed temperature in
@@ -99,10 +117,15 @@ integration for heat::
     heat = fd.weakform.HeatEquation(material, nlgeom="TL")
     assembly = fd.Assembly.create(mechanical + heat, mesh)
 
-``HeatEquation(nlgeom=None)`` (the default) follows the mechanical geometry,
-always using the TL thermal balance when finite strain is active. ``True`` is
-an alias for ``"TL"``. A fixed-geometry heat equation (``nlgeom=False``) is
-rejected in a coupled finite-strain solid.
+With a thermo-mechanical material, ``HeatEquation(nlgeom=None)`` (the default)
+follows the mechanical geometry and uses the TL thermal balance when finite
+strain is active. ``True`` is an alias for ``"TL"``. A fixed-geometry heat
+equation (``nlgeom=False``) is rejected in a coupled finite-strain solid. An
+uncoupled thermal material keeps the heat equation of the small-strain case
+unless ``nlgeom="TL"`` is given: its conductivity and capacity are then
+properties of the configuration on which the assembly integrates, the
+reference one next to TL mechanics and the current one next to UL mechanics
+(same assembly). The two models differ by the volume change.
 
 The native constitutive response uses the same reference Hencky energy for
 both mechanical assemblies. It evaluates ``h = ln U`` and its dual stress
@@ -142,14 +165,17 @@ Field convergence
 
     norm(residual_f) < atol_f + rtol_f * reference_f
 
-All fields must pass. The reference defaults to the current recovered force
-norm for that field, including reactions; a fixed nonnegative ``reference``
-can be supplied per field. Choose an absolute tolerance appropriate to the
-units of each field, especially for vanishing reaction/load references. No
-arbitrary force scale of one is substituted by this criterion.
+All fields must pass. The reference defaults to the norm of the reactions and
+applied loads of that field; a fixed nonnegative ``reference`` can be supplied
+per field. Choose an absolute tolerance appropriate to the units of each
+field. No arbitrary force scale of one is substituted by this criterion: a
+field without reaction nor load (an adiabatic temperature field for instance)
+has a zero reference, and a relative tolerance alone then raises
+``ValueError``.
 
 The maximum normalized field error must be below one; the scalar ``tol`` or
-``tol_nr`` does not set the Fields residual threshold. Other criteria retain
+``tol_nr`` does not set the Fields residual threshold. It still bounds the
+residual of nonlinear constraints such as ``MeanMotion``. Other criteria retain
 their existing behavior. ``pb.nr_errors`` reports the latest per-field errors.
 Fields must cover every free DOF, including global DOFs, without overlaps.
 MPC forces are reduced before checking the master DOFs of each field. Constraints
@@ -165,4 +191,4 @@ axisymmetry, incompressibility projections, material-frame transformations, damp
 generalized-alpha away from the endpoint are not yet supported. These modes
 raise explicit errors rather than silently dropping coupling terms. A staggered
 coupling driver remains a subsequent step. Finite thermoelasticity uses the
-Simcoon 2.2 conversion API; the package minimum is now 2.2.
+Simcoon conversion API (Simcoon 2.3 is the package minimum).

@@ -87,6 +87,14 @@ semantic versioning.
 
 ### Changed
 
+- **`HeatEquation` and `HeatCapacity` take `nlgeom=None` by default** (was
+  `False`). A thermo-mechanical material follows the mechanical geometry and
+  switches to the reference-configuration form in finite strain; an uncoupled
+  thermal material keeps the heat equation of the small-strain case, as
+  before, unless a heat-only assembly is given an `F` field. With
+  `nlgeom=True`/`'TL'` the heat assembly is nonsymmetric (`assume_sym=False`).
+- **Heat and mechanics with different materials emit a `UserWarning`**: the
+  problem is solved without thermo-mechanical coupling terms.
 - Simplify DataSet frame display to set_current_local_frame, show_local_frame
   (boolean or mesh-size percentage), local_frame_axis and local_frame_options
   (max_frames, gauss_points, legend). The viewer uses the same API.
@@ -292,6 +300,22 @@ semantic versioning.
   residual missed a factor of order J, while the tangent used the current
   mesh. Transient finite-strain consolidation was wrong by about the strain
   level (5 % at 5 % compression), but drained states were not affected.
+- **A coupled material split over two summed assemblies** now raises
+  `ValueError` instead of silently losing the thermoelastic coupling: sum the
+  weak forms before `Assembly.create`.
+- **`SimcoonThermoMechanical` nonpositive temperature**: a Newton iterate below
+  absolute zero is a failed increment (the time step is reduced) instead of an
+  uncaught `ValueError`; an unset initial `Temp` field stays a `ValueError`,
+  now also for native finite thermoelasticity.
+- **`SimcoonThermoMechanical` heat balance**: the heat of the increment
+  returned by `umat_T` is divided by the time increment, so that the thermal
+  balance no longer depends on `dt`.
+- **`Fields` reference norm** no longer contains the residual of unloaded free
+  DOFs; a relative tolerance alone on a field without reaction nor nodal load
+  raises a clear `ValueError` instead of never converging.
+- **Density of a coupled material**: a density that differs from the one of the
+  attached `ThermalProperties` (or from `props[0]` of
+  `SimcoonThermoMechanical`) raises `ValueError` instead of being overwritten.
 - Cartesian UL inertia integrates reference mass, including when the
   constitutive deformation gradient uses an incompressibility projection.
 
@@ -303,6 +327,18 @@ semantic versioning.
   (with `nlgeom="UL"`).
 - Update links to gallery pages: example pages moved from numbered folders
   (`examples/01-simple/...`) to topical ones (`examples/basic/...`).
+
+### Planned improvements
+
+- **Heat-only `HeatEquation(nlgeom="TL")` keeps a nonsymmetric assembly**
+  (`assume_sym=False`) although its operator is symmetric without a `Disp`
+  variable: only an extra assembly and factorization cost. The option should
+  follow the presence of mechanics in the assembly.
+- **Refactoring left for later**: one shared iterator over the leaf weak forms
+  of an assembly in the core (the walk is written out in `problem`, `time` and
+  `weakform`), the density of a coupled material as a property read from its
+  thermal properties, and shared helpers for the neighbouring
+  thermo-mechanical tests.
 
 ## [1.1.0] - 2026-10-14
 

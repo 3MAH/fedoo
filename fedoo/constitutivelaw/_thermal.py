@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from fedoo.core.base import InvalidKinematicStateError
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.util.voigt_tensors import StrainTensorList
 
@@ -20,6 +21,29 @@ def conductivity_tensor(conductivity):
             "Conductivity must be a nonnegative scalar or a symmetric positive-semidefinite 3x3 tensor."
         )
     return tensor
+
+
+def check_absolute_temperature(temperature, initial=False):
+    """Refuse a nonpositive or nonfinite absolute temperature (kelvin).
+
+    At initialization this is a model error (the initial ``Temp`` field was
+    not set) and raises ``ValueError``. During the Newton iterations it is an
+    overshoot of the iterate: ``InvalidKinematicStateError`` lets the solver
+    cut the time increment.
+    """
+    temperature = np.asarray(temperature)
+    if np.all(np.isfinite(temperature)) and np.all(temperature > 0):
+        return
+    if initial:
+        raise ValueError(
+            "Thermo-mechanical coupling requires absolute temperatures in "
+            "kelvin (T > 0); set the initial Temp field, e.g. "
+            "pb.set_dof('Temp', 293.15)."
+        )
+    raise InvalidKinematicStateError(
+        "Thermo-mechanical coupling requires absolute temperatures in kelvin "
+        "(T > 0)."
+    )
 
 
 def thermal_fields(material, assembly, pb, initial=False):
@@ -94,6 +118,8 @@ def initialize_thermal_state(material, assembly, pb):
     strain, temperature = thermal_fields(material, assembly, pb, initial=not finite)
     if finite:
         import simcoon as sim
+
+        check_absolute_temperature(temperature, initial=True)
 
         if "DispX" in assembly.space.list_variables():
             solution = pb.get_dof_solution()

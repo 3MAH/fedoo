@@ -15,6 +15,9 @@ class ThermalProperties(ConstitutiveLaw):
 
     Small-strain feedback is linearized at ``reference_temperature``; finite
     strain uses the actual absolute temperature and the logarithmic strain.
+    With ``coupling=True`` the temperature field and ``reference_temperature``
+    are necessarily absolute temperatures in kelvin (never degrees Celsius):
+    the thermoelastic heat source is proportional to the absolute temperature.
     ``coupling=False`` retains thermal expansion and disables feedback.
     Conductivity is the spatial tensor in current global axes; ``heat_source``
     is supplied per reference volume in finite strain.
