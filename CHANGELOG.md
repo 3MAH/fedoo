@@ -82,6 +82,12 @@ semantic versioning.
 
 ### Changed
 
+- Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
+  strain increment the material point solves (33, 13, 23) starts from the last solved
+  one, that of the previous global iteration, or of the previous increment scaled to
+  the time step, instead of zero. Fewer law evaluations per point (plane-stress plate,
+  EPICP / EPCHA: -13 % / -20 % on the whole run); results move within the tolerance
+  of the material-point Newton (1e-10).
 - Simplify DataSet frame display to set_current_local_frame, show_local_frame
   (boolean or mesh-size percentage), local_frame_axis and local_frame_options
   (max_frames, gauss_points, legend). The viewer uses the same API.
