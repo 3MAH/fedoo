@@ -883,10 +883,10 @@ class MechanicalUMAT(Mechanical3D):
         )
         if ndi == 2:
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly, "2Dstress")
-            assembly.sv["_OutOfPlaneDStrain"] = np.array(
-                dstrain_local[_PLANE_STRESS_FREE]
-            )
-            assembly.sv["_OutOfPlaneDtime"] = pb.dtime
+            if pb.dtime > 0.0:
+                assembly.sv["_OutOfPlaneDStrainRate"] = (
+                    dstrain_local[_PLANE_STRESS_FREE] / pb.dtime
+                )
             self._carry_out_of_plane_strain(
                 assembly,
                 dstrain_local if incremental_strain else strain_start + dstrain_local,
@@ -903,23 +903,19 @@ class MechanicalUMAT(Mechanical3D):
     def _out_of_plane_guess(assembly, dtime, shape):
         """Starting guess of the plane-stress out-of-plane strain increment.
 
-        The increment (33, 13, 23, law frame) the material points solved
-        last: that of the previous global iteration, or at the first
-        iteration of an increment that of the previous increment, scaled to
-        the time step. Zero without one. The callback solves these
-        components from any start; a start near the root saves law
-        evaluations (about one in four on a monotonic elastoplastic path).
+        The rate of the increment (33, 13, 23, law frame) the material points
+        solved last, times the time step: that of the previous global
+        iteration, or at the first iteration of an increment that of the
+        previous increment. Zero without one. The rate is one array per Gauss
+        point, so a ``Heterogeneous`` law maps it to its sub-assemblies. The
+        callback solves these components from any start; a start near the root
+        saves law evaluations (about one in four on a monotonic elastoplastic
+        path).
         """
-        guess = assembly.sv.get("_OutOfPlaneDStrain")
-        dtime_guess = assembly.sv.get("_OutOfPlaneDtime", 0.0)
-        if (
-            guess is None
-            or guess.shape != shape
-            or not (dtime_guess > 0.0)
-            or not (dtime > 0.0)
-        ):
+        if not (dtime > 0.0) or "_OutOfPlaneDStrainRate" not in assembly.sv:
             return 0.0
-        return guess * (dtime / dtime_guess)
+        rate = np.asarray(assembly.sv["_OutOfPlaneDStrainRate"])
+        return rate * dtime if rate.shape == shape else 0.0
 
     def _carry_out_of_plane_strain(self, assembly, strain_local, trial_frame, key):
         """Store the out-of-plane strain solved by a plane-stress material point.

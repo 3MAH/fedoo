@@ -119,3 +119,38 @@ def test_simcoon_rejects_unsupported_return_mapping_options():
         _uniaxial_tension(*PLASTIC, ncp="unknown")
     with pytest.raises(ValueError, match="integrator"):
         _uniaxial_tension(*PLASTIC, integrator="unknown")
+
+
+def _heterogeneous_tension():
+    """Plane-stress square, plastic left half and elastic right half."""
+    fd.ModelingSpace("2Dstress")
+    mesh = fd.mesh.rectangle_mesh(5, 3, 0, 1, 0, 1, "quad4")
+    left = mesh.find_elements("X < 0.5")
+    right = np.setdiff1d(np.arange(mesh.n_elements), left)
+    material = fd.constitutivelaw.Heterogeneous(
+        (fd.constitutivelaw.Simcoon(*PLASTIC), fd.constitutivelaw.Simcoon(*ELASTIC)),
+        (left, right),
+    )
+    assembly = fd.Assembly.create(fd.weakform.StressEquilibrium(material), mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_nr_criterion("Displacement", tol=1e-8, max_subiter=10, err0=1)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 0), ["DispX", "DispY"], 0)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 1), "DispX", 0.02)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 1), "DispY", 0.01)
+    pb.nlsolve(dt=0.2, tmax=1, update_dt=False, print_info=0)
+    return assembly
+
+
+def test_out_of_plane_warm_start_matches_a_zero_start(monkeypatch):
+    warm = _heterogeneous_tension()
+    assert "_OutOfPlaneDStrainRate" in warm.sv
+    monkeypatch.setattr(
+        fd.core.mechanical3d.MechanicalUMAT,
+        "_out_of_plane_guess",
+        staticmethod(lambda assembly, dtime, shape: 0.0),
+    )
+    cold = _heterogeneous_tension()
+    for key in ("Stress", "Strain"):
+        np.testing.assert_allclose(
+            np.asarray(warm.sv[key]), np.asarray(cold.sv[key]), rtol=1e-8, atol=1e-10
+        )
