@@ -34,6 +34,7 @@ from fedoo.weakform._axi_utils import (
     axi_radius,
     axi_volume_weight,
 )
+from fedoo.weakform.inertia import set_mass_quadrature
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 from fedoo.weakform.stress_equilibrium_mixed import StressEquilibriumMixed
 
@@ -813,6 +814,11 @@ class PoroMechanics(WeakFormSum):
         if name == "":
             name = getattr(skeleton_law, "name", "") or "poromechanics"
         super().__init__([momentum, darcy, storage], name)
+        # The storage term is a consistent (non lumped) N_i N_j block and the
+        # three terms share the assembly state: keep them in one assembly with
+        # the exact mass quadrature on equal-order tetrahedra.
+        for wf in (momentum, darcy, storage):
+            set_mass_quadrature(wf)
 
 
 class PoroMechanicsSimple(WeakFormSum):
@@ -878,3 +884,8 @@ class PoroMechanicsSimple(WeakFormSum):
         if name == "":
             name = getattr(skeleton_law, "name", "") or "poromechanics_simple"
         super().__init__([momentum, darcy, storage], name)
+        # The storage term is a consistent (non lumped) N_i N_j block and the
+        # three terms share the assembly state: keep them in one assembly with
+        # the exact mass quadrature on equal-order tetrahedra.
+        for wf in (momentum, darcy, storage):
+            set_mass_quadrature(wf)

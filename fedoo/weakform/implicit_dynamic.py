@@ -1,6 +1,6 @@
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.time.base import warn_if_conditionally_stable
-from fedoo.weakform.inertia import Inertia
+from fedoo.weakform.inertia import MASS_N_ELM_GP, Inertia, set_mass_quadrature
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 
 import numpy as np
@@ -18,6 +18,11 @@ class _NewmarkInertia(WeakFormBase):
             density = wf
             wf = Inertia(density)
         self.mass_wf = wf
+        # the mass is assembled through this weak form: same quadrature
+        for elm_type, options in wf.assembly_options.elm_options.items():
+            if "n_elm_gp" in options:
+                self.assembly_options["n_elm_gp", elm_type] = options["n_elm_gp"]
+        set_mass_quadrature(self)
         self.nlgeom = nlgeom
         self.damping_coef = None  # for Rayleigh damping
 
@@ -262,6 +267,17 @@ class ImplicitDynamic(ImplicitDynamicSum):
         _NewmarkStiffness.__init__(stiffness_weakform, beta, gamma)
 
         time_integration = _NewmarkInertia(density, beta, gamma, "", nlgeom, space)
+        # The stiffness reads the Newmark state (Velocity, Acceleration) held
+        # by the inertia assembly: both must share one assembly, hence one
+        # quadrature. On tetrahedra the mass needs more points than the
+        # stiffness default; use the mass quadrature for both unless the user
+        # set one on the stiffness weak form.
+        for elm_type in MASS_N_ELM_GP:
+            n_elm_gp = stiffness_weakform.assembly_options.get("n_elm_gp", elm_type)
+            if n_elm_gp is None:
+                n_elm_gp = time_integration.assembly_options.get("n_elm_gp", elm_type)
+                stiffness_weakform.assembly_options["n_elm_gp", elm_type] = n_elm_gp
+            time_integration.assembly_options["n_elm_gp", elm_type] = n_elm_gp
         # assume_sym is left unset so that both children share the same
         # assembly grouping key (merged assembly); the stiffness weakform
         # decides it at initialize (True except UL, where the Lie tangent is

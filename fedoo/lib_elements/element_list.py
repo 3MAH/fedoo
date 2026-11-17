@@ -14,7 +14,7 @@ from fedoo.lib_elements.quadrangle import (
 )
 
 # from fedoo.lib_elements.plate import *
-from fedoo.lib_elements.tetrahedron import Tet4, Tet10, Tet10r
+from fedoo.lib_elements.tetrahedron import Tet4, Tet4r, Tet10, Tet10r
 from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6
 from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
@@ -34,6 +34,7 @@ _dict_elements = {
     "quad8": Quad8,
     "quad9": Quad9,
     "tet4": Tet4,
+    "tet4r": Tet4r,
     "tet10": Tet10,
     "tet10r": Tet10r,
     "hex8": Hex8,
@@ -64,8 +65,9 @@ _dict_default_n_gp = {
     "quad4hourglass": 1,
     "quad8": 9,
     "quad9": 9,
-    "tet4": 4,
-    "tet10": 15,
+    "tet4": 1,
+    "tet4r": 1,
+    "tet10": 4,
     "tet10r": 4,
     "hex8": 8,
     "hex8r": 1,
@@ -85,6 +87,13 @@ _dict_default_n_gp = {
     "ptri6": 7,
     "pquad9": 9,
 }
+
+# Quadrature of the consistent mass (N_i N_j) for the elements whose default
+# rule is too coarse for it: 1 point is exact for the tet4 stiffness but gives
+# a rank-deficient mass, 4 points are exact for the straight-sided tet10
+# stiffness but not for its (degree 4) mass. Used by the Inertia weak form and
+# by the time integrators.
+MASS_N_ELM_GP = {"tet4": 4, "tet4r": 4, "tet10": 15, "tet10r": 15}
 
 
 def add_elements(*args):
@@ -131,7 +140,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 [-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0],
                 [-1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0],
             ]
-    elif element in ["tet4", "tet10", "tet10r"]:
+    elif element in ["tet4", "tet4r", "tet10", "tet10r"]:
         if nNd_elm == 4:
             return np.c_[
                 [0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]

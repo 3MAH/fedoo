@@ -6,8 +6,25 @@ from fedoo.core.assembly import Assembly
 from fedoo.core.base import AssemblyBase
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormSum
+from fedoo.lib_elements.element_list import MASS_N_ELM_GP, get_default_n_gp
 
 _STAB_TOL = 1e-12
+
+
+def _use_storage_quadrature(assembly):
+    """Raise the quadrature of a leaf that now carries a storage (mass) term.
+
+    The storage term is assembled in the same leaf as the stiffness. On
+    tetrahedra the default rule (1 point on tet4, 4 on tet10) is exact for
+    the stiffness but not for the N_i N_j storage, so a leaf left at its
+    default quadrature is moved to the storage one. A user-chosen quadrature
+    (different from the default) is kept.
+    """
+    n_storage = MASS_N_ELM_GP.get(assembly.elm_type)
+    if n_storage is None:
+        return
+    if assembly.n_elm_gp == get_default_n_gp(assembly.elm_type, assembly.mesh):
+        assembly.n_elm_gp = n_storage
 
 
 def warn_if_conditionally_stable(beta, gamma, alpha_m=0.0, alpha_f=0.0, context=""):
@@ -69,7 +86,10 @@ class TimeIntegratorBase:
         evolution = normalize_time_evolution(evolution or self.evolution)
         for leaf in assembly.iter_leaf():
             if isinstance(leaf, Assembly) and leaf.weakform is not None:
-                leaf.weakform = self.compile_weakform(leaf.weakform, evolution)
+                compiled = self.compile_weakform(leaf.weakform, evolution)
+                if compiled is not leaf.weakform:
+                    leaf.weakform = compiled
+                    _use_storage_quadrature(leaf)
             elif isinstance(leaf, AssemblyBase):
                 self._compile_assembly_level_provider(leaf)
         return assembly

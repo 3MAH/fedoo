@@ -82,6 +82,19 @@ semantic versioning.
 
 ### Changed
 
+- Default quadrature of the tetrahedra aligned on Abaqus and Ansys: ``tet4``
+  uses 1 Gauss point (was 4) and ``tet10`` 4 points (was 15). Both rules are
+  exact for the stiffness of a straight-sided element. ``tet4r`` (new) and
+  ``tet10r`` are now plain aliases of ``tet4`` and ``tet10``. The consistent
+  mass keeps an exact rule (4 points on ``tet4``, 15 on ``tet10``): the
+  ``Inertia`` weak form sets it through ``assembly_options``, and a time
+  integrator that adds the mass to a stiffness assembly left at its default
+  quadrature moves that assembly to the mass rule (``ImplicitDynamic``
+  does the same). ``StressEquilibriumMixed``, ``PoroMechanics`` and
+  ``PoroMechanicsSimple`` carry an ``N_i N_j`` pressure block (``P/K``,
+  non-lumped Biot storage) and keep the same mass rule on equal-order
+  tetrahedra (Taylor-Hood combined elements are exact with 4 points). Static results on ``tet10`` change slightly for nonlinear
+  laws or curved elements.
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
@@ -302,6 +315,9 @@ semantic versioning.
 
 ### Migration
 
+- To get the previous tetrahedron integration back, pass ``n_elm_gp=4``
+  (``tet4``) or ``n_elm_gp=15`` (``tet10``) to ``Assembly.create``, or set
+  ``wf.assembly_options["n_elm_gp", "tet10"] = 15``.
 - Remove `material.corate = ...` from scripts (it now warns and was never
   read). To choose
   the objective rate, set `wf.corate` on the `StressEquilibrium` weak form

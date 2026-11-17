@@ -105,10 +105,14 @@ class ElementTetrahedron(Element):
 
 class Tet4(ElementTetrahedron):
     name = "tet4"
-    default_n_gp = 4
+    default_n_gp = 1
     n_nodes = 4
 
-    def __init__(self, n_elm_gp=4, **kargs):
+    # 1 Gauss point by default (as Abaqus C3D4 and Ansys SOLID285): the strain
+    # is constant in a linear tetrahedron, so the stiffness and the internal
+    # forces are exact for any constitutive law. Mass-like terms (N_i N_j) need
+    # the 4-point rule, which the Inertia weak form selects by itself.
+    def __init__(self, n_elm_gp=1, **kargs):
         self.xi_nd = np.c_[
             [0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]
         ]
@@ -132,10 +136,13 @@ class Tet4(ElementTetrahedron):
 
 class Tet10(ElementTetrahedron):
     name = "tet10"
-    default_n_gp = 15
+    default_n_gp = 4
     n_nodes = 10
 
-    def __init__(self, n_elm_gp=15, **kargs):
+    # 4 Gauss points by default (as Abaqus C3D10 and Ansys SOLID187): exact
+    # stiffness for a straight-sided element. The 15-point rule is available
+    # through ``n_elm_gp=15``; the Inertia weak form uses it for the mass.
+    def __init__(self, n_elm_gp=4, **kargs):
         self.xi_nd = np.c_[
             [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5],
             [1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0],
@@ -208,14 +215,17 @@ class Tet10(ElementTetrahedron):
         ]
 
 
-class Tet10r(Tet10):
-    name = "tet10r"
-    default_n_gp = 4
-    n_nodes = 10
+class Tet4r(Tet4):
+    """Alias of :py:class:`Tet4` (1 Gauss point by default)."""
 
-    # Same 10-node quadratic interpolation as Tet10, but integrated with the
-    # 4-point rule instead of the default accurate 15-point rule. This matches
-    # the integration scheme of the Ansys SOLID187 tetrahedron and is cheaper
-    # while remaining stable (a 1-point rule would be rank deficient).
-    def __init__(self, n_elm_gp=4, **kargs):
-        Tet10.__init__(self, n_elm_gp, **kargs)
+    name = "tet4r"
+
+
+class Tet10r(Tet10):
+    """Alias of :py:class:`Tet10` (4 Gauss points by default).
+
+    Kept for backward compatibility: ``tet10`` now uses the 4-point rule by
+    default. Pass ``n_elm_gp=15`` for the full integration.
+    """
+
+    name = "tet10r"
