@@ -8,6 +8,16 @@ semantic versioning.
 
 ### Added
 
+- Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
+  (``tests/test_simcoon_integrator_options.py``): the closest point lands on the
+  cutting-plane state, ``ncp="min"`` runs under both integrators, a law without a
+  closest-point update is refused. The ``Simcoon`` docstring follows simcoon 2.4
+  (``"min"`` under the closest point; the refusal raises, nothing falls back).
+- ``Simcoon`` accepts the ``NAME_closed`` names of simcoon 2.4 (the dedicated kernels
+  kept next to the modular default, ``EPICP_closed``, ``ZENER_closed``...): the props
+  and statev layout is the plain name's, the full name goes to ``sim.umat``.
+  ``test_finite_strain_tangent_consistency`` asks ``ZENER_closed`` (not ``ZENER``,
+  served by the modular engine since simcoon 2.4) to refuse the total formulation.
 - Independent local-frame overlays in DataSet.plot via local_frame and
   one-based local_frame_axis, with size, density, placement and legend controls.
   The viewer uses the same plotting implementation, including mixed-mesh
@@ -72,6 +82,12 @@ semantic versioning.
 
 ### Changed
 
+- Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
+  strain increment the material point solves (33, 13, 23) starts from the last solved
+  one, that of the previous global iteration, or of the previous increment scaled to
+  the time step, instead of zero. Fewer law evaluations per point (plane-stress plate,
+  EPICP / EPCHA: -13 % / -20 % on the whole run); results move within the tolerance
+  of the material-point Newton (1e-10).
 - Simplify DataSet frame display to set_current_local_frame, show_local_frame
   (boolean or mesh-size percentage), local_frame_axis and local_frame_options
   (max_frames, gauss_points, legend). The viewer uses the same API.
