@@ -996,14 +996,16 @@ class MechanicalUMAT(Mechanical3D):
                 )
 
         if ndi < 3:
-            # Reduced stress state: the strain of the stress-free components
-            # is an unknown of the material point. The callback receives its
-            # own writable increment, starting from the committed value of
-            # these components (zero increment), and may overwrite them in
-            # place with the solved ones (sim.umat does), carried below.
+            # The callback may overwrite the stress-free components of its
+            # writable increment. In plane stress, seed them with the last
+            # solved rate scaled to the current time step.
             free = _FREE_COMPONENTS[assembly.space.get_dimension()]
             dstrain_local = np.array(dstrain_local, dtype=float, order="F")
-            dstrain_local[free] = 0.0
+            dstrain_local[free] = (
+                self._out_of_plane_guess(assembly, pb.dtime, dstrain_local[free].shape)
+                if ndi == 2
+                else 0.0
+            )
 
         wf = getattr(assembly, "weakform", None)
         corate = _constitutive_corate(assembly)
@@ -1038,6 +1040,8 @@ class MechanicalUMAT(Mechanical3D):
         )
         if ndi < 3:
             assembly.sv["TangentMatrix"] = self.get_tangent_matrix(assembly)
+            if ndi == 2 and pb.dtime > 0.0:
+                assembly.sv["_OutOfPlaneDStrainRate"] = dstrain_local[free] / pb.dtime
             self._carry_condensed_strain(
                 assembly,
                 dstrain_local if incremental_strain else strain_start + dstrain_local,
@@ -1050,6 +1054,24 @@ class MechanicalUMAT(Mechanical3D):
             if in_trial
             else self.local2global_stress(stress_local, assembly, current=False)
         )
+
+    @staticmethod
+    def _out_of_plane_guess(assembly, dtime, shape):
+        """Starting guess of the plane-stress out-of-plane strain increment.
+
+        The rate of the increment (33, 13, 23, law frame) the material points
+        solved last, times the time step: that of the previous global
+        iteration, or at the first iteration of an increment that of the
+        previous increment. Zero without one. The rate is one array per Gauss
+        point, so a ``Heterogeneous`` law maps it to its sub-assemblies. The
+        callback solves these components from any start; a start near the root
+        saves law evaluations (about one in four on a monotonic elastoplastic
+        path).
+        """
+        if not (dtime > 0.0) or "_OutOfPlaneDStrainRate" not in assembly.sv:
+            return 0.0
+        rate = np.asarray(assembly.sv["_OutOfPlaneDStrainRate"])
+        return rate * dtime if rate.shape == shape else 0.0
 
     def _carry_condensed_strain(self, assembly, strain_local, trial_frame, key, free):
         """Store the strain solved by a material point in a reduced stress state.
