@@ -17,7 +17,6 @@ from fedoo.core.mesh import MultiMesh
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import simcoon as sim
-from fedoo.constitutivelaw._simcoon_features import has_total_formulation
 import os
 from zipfile import ZipFile, Path
 
@@ -740,17 +739,12 @@ def _get_results(
         elif res in _LOG_MEASURES:
             # The measures of one finite-strain formulation read in a run of the other:
             # ln U and ln V from F, and the stress T dual to ln U from the Cauchy stress.
-            if (
-                not _has_state_function_strain(assemb)
-                or "F" not in sv
-                or (res == "LogStressU" and not has_total_formulation())
-            ):
+            if not _has_state_function_strain(assemb) or "F" not in sv:
                 if ignore_missing:
                     continue
                 raise NameError(
                     'Field "{}" is available in finite strain when the strain is a '
-                    'state function of F: nlgeom="TL", or corate "log_r" or "log" '
-                    "(LogStressU needs a simcoon with the total formulation)".format(
+                    'state function of F: nlgeom="TL", or corate "log_r" or "log"'.format(
                         res
                     )
                 )

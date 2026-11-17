@@ -3,7 +3,6 @@
 
 from fedoo.core.base import InvalidKinematicStateError
 from fedoo.core.mechanical3d import MechanicalUMAT, _constitutive_corate
-from fedoo.constitutivelaw._simcoon_features import serves_condensed, serves_total
 import simcoon as sim
 
 _CORATE_CODES = {
@@ -117,8 +116,8 @@ class Simcoon(MechanicalUMAT):
       stress (``2Dstress``) or uniaxial stress (``1Dstress``) only when
       simcoon condenses the state itself, which fedoo asks through
       ``simcoon.condensation_serves``; otherwise a ``NotImplementedError`` is
-      raised. Laws driven by the strain are condensed by fedoo when simcoon
-      does not serve the state. They remain compatible with 2Daxi at
+      raised. Unsupported reduced states are refused for strain-driven laws
+      as well. They remain compatible with 2Daxi at
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
 
@@ -145,10 +144,9 @@ class Simcoon(MechanicalUMAT):
 
         simcoon answers: its log-strain boxes, the modular material among them,
         and the hyperelastic kernels built on F are served; the rate law and the
-        small-strain-only laws are not. A simcoon without the total formulation
-        (2.1) serves none, and the law keeps the rate update.
+        small-strain-only laws are not.
         """
-        return serves_total(self.umat_name)
+        return bool(sim.total_formulation_serves(self.umat_name))
 
     def _serves_reduced_state(self, ndi, assembly=None):
         """Whether simcoon condenses the reduced state ``ndi`` for this law.
@@ -158,9 +156,10 @@ class Simcoon(MechanicalUMAT):
         and a law served in rate form may not be under the total formulation.
         """
         total = assembly is not None and _constitutive_corate(assembly) is None
-        return serves_condensed(
-            self.umat_name, ndi, kinematic_form="total" if total else None
-        )
+        if ndi == 3:
+            return True
+        options = {"kinematic_form": "total"} if total else {}
+        return bool(sim.condensation_serves(self.umat_name, ndi, **options))
 
     @property
     def manages_material_frame(self):

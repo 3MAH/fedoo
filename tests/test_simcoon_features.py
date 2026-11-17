@@ -1,4 +1,4 @@
-"""simcoon capabilities are queried by feature, with a fallback when absent."""
+"""Per-law Simcoon capabilities and reduced-state numerical regressions."""
 
 from types import SimpleNamespace
 
@@ -6,37 +6,7 @@ import numpy as np
 import pytest
 
 import fedoo as fd
-from fedoo.constitutivelaw import _simcoon_features as features
-
-sim = pytest.importorskip("simcoon")
-
-
-def _condenses_finite_strain_f():
-    """Whether simcoon solves the plane-stress state of an F-based law."""
-    F0 = np.eye(3)[:, :, None]
-    F1 = F0.copy()
-    F1[0, 0] = 1.2
-    strain, dstrain = np.zeros((6, 1)), np.zeros((6, 1))
-    dstrain[0] = np.log(1.2)
-    try:
-        stress = sim.umat(
-            "NEOHC",
-            strain,
-            dstrain,
-            F0,
-            F1,
-            np.zeros((6, 1)),
-            F0.copy(),
-            np.array([1.0, 30.0]),
-            np.zeros((1, 1)),
-            0.0,
-            1.0,
-            np.zeros((4, 1)),
-            ndi=2,
-        )[0]
-    except Exception:  # noqa: BLE001 - any failure means "not served"
-        return False
-    return abs(np.ravel(stress)[2]) < 1e-10
+import simcoon as sim
 
 
 def _uniaxial_bar(dim):
@@ -58,9 +28,7 @@ def _uniaxial_bar(dim):
 
 
 def test_reduced_state_needs_the_capability(monkeypatch):
-    monkeypatch.delattr(sim, "condensation_serves", raising=False)
-    assert not features.serves_condensed("NEOHC", 2)
-    assert features.serves_condensed("NEOHC", 3)
+    monkeypatch.setattr(sim, "condensation_serves", lambda *args, **kwargs: False)
     pb = _uniaxial_bar("2Dstress")
     with pytest.raises(NotImplementedError, match="reduced stress state"):
         pb.nlsolve(dt=0.5, update_dt=False, print_info=0)
@@ -73,21 +41,16 @@ def test_query_arguments_are_forwarded(monkeypatch):
         calls.append((name, ndi, kwargs))
         return name == "NEOHC"
 
-    monkeypatch.setattr(sim, "condensation_serves", serves, raising=False)
-    assert features.serves_condensed("NEOHC", 1, nshr=0, kinematic_form="total")
-    assert not features.serves_condensed("ELISO", 2)
-    assert calls[0] == ("NEOHC", 1, {"nshr": 0, "kinematic_form": "total"})
+    monkeypatch.setattr(sim, "condensation_serves", serves)
+    law = fd.constitutivelaw.Simcoon("NEOHC", [1.0, 30.0])
+    total = SimpleNamespace(_nlgeom="TL", _corate=None)
+    assert law._serves_reduced_state(1, total)
+    assert law._serves_reduced_state(2)
+    assert law._serves_reduced_state(3)
+    assert calls == [("NEOHC", 1, {"kinematic_form": "total"}), ("NEOHC", 2, {})]
 
 
-@pytest.mark.skipif(
-    not _condenses_finite_strain_f(),
-    reason="simcoon does not condense finite-strain F-based laws",
-)
-def test_served_plane_stress_hyperelastic_matches_uniaxial_3d(monkeypatch):
-    if not hasattr(sim, "condensation_serves"):
-        monkeypatch.setattr(
-            sim, "condensation_serves", lambda name, ndi, **k: True, raising=False
-        )
+def test_served_plane_stress_hyperelastic_matches_uniaxial_3d():
     results = []
     for dim in ("3D", "2Dstress"):
         pb = _uniaxial_bar(dim)
@@ -98,15 +61,14 @@ def test_served_plane_stress_hyperelastic_matches_uniaxial_3d(monkeypatch):
     assert results[1] == pytest.approx(results[0], rel=1e-9)
 
 
-def test_reduced_state_is_asked_for_the_formulation_the_law_runs_with():
-    # simcoon validates a condensed state per kinematic form
-    name = "ZENER"
-    if not hasattr(sim, "condensation_serves") or sim.condensation_serves(
-        name, 2, kinematic_form="total"
-    ):
-        pytest.skip("simcoon serves this law under both forms")
+def test_reduced_state_is_asked_for_the_formulation_the_law_runs_with(monkeypatch):
+    # Capability sets may change; ensure the adapter asks for the actual form.
+    def serves(name, ndi, **kwargs):
+        return kwargs.get("kinematic_form") != "total"
+
+    monkeypatch.setattr(sim, "condensation_serves", serves)
     law = fd.constitutivelaw.Simcoon.__new__(fd.constitutivelaw.Simcoon)
-    law.umat_name = name
+    law.umat_name = "ZENER"
     rate = SimpleNamespace(_nlgeom="UL", _corate="log_r")
     total = SimpleNamespace(_nlgeom="TL", _corate=None)
     assert law._serves_reduced_state(2, rate)

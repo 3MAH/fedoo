@@ -162,7 +162,7 @@ semantic versioning.
   50 % with a constant permeability). The limitation entry now describes the
   pore-closure bound `J > 1 - phi_0` of deformation-dependent permeabilities,
   and `tests/test_poromech_finite_strain.py` runs at 20 % compression.
-- Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
+- Require `simcoon>=2.4`. Plane-stress tangents are already condensed by
   Simcoon and are no longer condensed a second time by fedoo.
 - Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
   all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
@@ -230,12 +230,13 @@ semantic versioning.
   Linux and Windows x86_64.
 - The material-point helpers of the nonlinear shells moved to
   `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
-- simcoon capabilities are queried by feature, never by version, in
-  `fedoo.constitutivelaw._simcoon_features` (`serves_total`,
-  `serves_condensed`). Hyperelastic Simcoon laws built on F are accepted in
+- Simcoon capabilities are queried directly through `total_formulation_serves`
+  and `condensation_serves`, available in the required Simcoon versions.
+  Compatibility fallbacks for older versions are removed. Hyperelastic
+  Simcoon laws built on F are accepted in
   `2Dstress` and `1Dstress` when simcoon reports, through
-  `condensation_serves`, that it condenses the state; older simcoon versions
-  keep the previous `NotImplementedError`.
+  `condensation_serves`, that it condenses the state; unsupported laws and
+  formulations raise `NotImplementedError`.
 - UMAT laws in a reduced stress state (`2Dstress`, `1Dstress`) now store the
   strain of the stress-free components solved by the material point in
   `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
