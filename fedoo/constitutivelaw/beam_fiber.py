@@ -10,7 +10,7 @@ from fedoo.constitutivelaw._material_points import (
     _MaterialPointAssembly,
     _tangent_array,
 )
-from fedoo.constitutivelaw.beam import BeamProperties
+from fedoo.constitutivelaw.beam import BeamMesh, BeamProperties
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.util.beam_recovery import SectionRecoveryUnavailable
 from fedoo.util.beam_tensors import BeamStressList
@@ -140,8 +140,8 @@ class BeamNonLinear(BeamProperties):
     ----------
     section : BeamProperties
         Section geometry: ``BeamRectangular``, ``BeamCircular``, ``BeamPipe``
-        or a subclass that defines ``section_bounds``, the latter with
-        explicit ``fibers``. A section given by its properties only
+        or ``BeamMesh``, or a subclass that defines ``section_bounds`` and
+        takes explicit ``fibers``. A section given by its properties only
         (``BeamProperties``) is refused. Its material is the fiber material
         unless ``material`` is given. Section dimensions must be uniform.
     fibers : tuple, optional
@@ -155,8 +155,9 @@ class BeamNonLinear(BeamProperties):
           ``(2, 16)``), with at least three sectors.
         * Three arrays ``(y, z, weights)``: the fibers themselves, in
           physical centroid-relative coordinates, with their areas. Required
-          for a custom section; their sums should match ``A``, ``Iyy`` and
-          ``Izz`` of the section, which is not checked.
+          for a custom section other than ``BeamMesh``; their sums should
+          match ``A``, ``Iyy`` and ``Izz`` of the section, which is not checked.
+          If omitted for ``BeamMesh``, use the mesh quadrature.
     material : Mechanical3D or str, optional
         Fiber material, for instance ``fedoo.constitutivelaw.Simcoon``. It
         must support the ``"1Dstress"`` stress state and have uniform
@@ -236,7 +237,10 @@ class BeamNonLinear(BeamProperties):
             setattr(self, attribute, getattr(section, attribute))
         self._n_points = section.n_points
 
-        y, z, weights = _explicit_fibers(fibers) or _section_fibers(section, fibers)
+        if fibers is None and isinstance(section, BeamMesh):
+            y, z, weights = section.fibers
+        else:
+            y, z, weights = _explicit_fibers(fibers) or _section_fibers(section, fibers)
         self._y, self._z, self._weights = y, z, weights
         self._output_points = np.column_stack(
             section.normalize_section_coordinates((y, z))
@@ -269,6 +273,15 @@ class BeamNonLinear(BeamProperties):
         return self._y.copy(), self._z.copy(), self._weights.copy()
 
     # Section geometry of the underlying section
+    def section_description(self):
+        description = self._section.section_description()
+        description.update(
+            recovery=self.recovery,
+            n_points=self.n_points,
+            output_points=self._output_points.tolist(),
+        )
+        return description
+
     def section_bounds(self):
         return self._section.section_bounds()
 

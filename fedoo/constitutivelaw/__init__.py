@@ -70,6 +70,7 @@ These laws should be associated with :py:class:`fedoo.weakform.InterfaceForce`
    BeamCircular
    BeamPipe
    BeamRectangular
+   BeamMesh
    BeamNonLinear
 
 Shell constitutive laws
@@ -181,7 +182,7 @@ frame (axis 1 along the beam).
 
 """
 
-from .beam import BeamCircular, BeamPipe, BeamProperties, BeamRectangular
+from .beam import BeamCircular, BeamMesh, BeamPipe, BeamProperties, BeamRectangular
 from .beam_fiber import BeamNonLinear
 from .cohesivelaw import CohesiveLaw
 from .composite_ud import CompositeUD
@@ -206,6 +207,7 @@ from .thermal_prop import ThermalProperties
 
 __all__ = [
     "BeamCircular",
+    "BeamMesh",
     "BeamNonLinear",
     "BeamPipe",
     "BeamProperties",

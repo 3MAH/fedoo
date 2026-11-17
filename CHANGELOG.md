@@ -81,6 +81,10 @@ semantic versioning.
   its properties only (`BeamProperties`) is refused. The single `fibers`
   argument takes either the counts of the built-in quadrature, e.g.
   `(n_y, n_z)`, or the fibers themselves as `(y, z, weights)`.
+- `BeamMesh` computes the area and centroidal bending moments of inertia
+  from a 2D section mesh, with optional principal-axis alignment through
+  `rotate_mesh=True`. `BeamNonLinear` can use its Gauss points and weights as
+  fibers. The torsion constant and shear factor are supplied separately.
 - `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
   `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
   tangent onto any set of Voigt components; native elastic laws and UMAT laws

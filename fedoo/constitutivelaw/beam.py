@@ -1,5 +1,6 @@
 """Beam constitutive laws."""
 
+import warnings
 from types import SimpleNamespace
 from fedoo.util.beam_recovery import (
     validate_positions,
@@ -10,6 +11,7 @@ from fedoo.mesh import disk_mesh, hollow_disk_mesh, rectangle_mesh
 
 
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.mesh import Mesh
 from fedoo.util.beam_tensors import BeamStressList, BeamStrainList
 import numpy as np
 
@@ -480,6 +482,113 @@ class BeamProperties(ConstitutiveLaw):
         if np.isscalar(beamstrain) and beamstrain == 0:
             beamstrain = np.zeros((6, assembly.n_gauss_points))
         return BeamStrainList(beamstrain).get_strain(self, coordinates)
+
+
+class BeamMesh(BeamProperties):
+    """Beam properties and fiber quadrature from a planar section mesh.
+
+    Pass a 2D ``section_mesh`` with ``tri3``, ``tri6``, ``quad4``, ``quad8``
+    or ``quad9`` elements in physical units. Its coordinate columns correspond
+    to the section's y and z directions. The section is centered at its area
+    centroid. By default the input axes are retained, with a warning if they
+    are not principal axes. Set ``rotate_mesh=True`` to align the section with
+    the closest principal axes for uncoupled elastic bending. ``centroid`` and
+    ``principal_angle`` (the applied rotation in radians) describe the
+    transformation. Orient the beam's local axes accordingly.
+
+    Area and second moments use the element Gauss rules. Supply the
+    Saint-Venant torsion constant ``Jx`` (use 0 for a planar bending model)
+    and, if needed, a transverse shear factor ``k``. The mesh is not used to
+    solve torsional warping or recover torsional stresses. Wrap the section in
+    ``BeamNonLinear`` to use its quadrature points as material fibers.
+    """
+
+    section_type = "mesh"
+    _quadrature = {"tri3": 3, "tri6": 12, "quad4": 4, "quad8": 16, "quad9": 16}
+
+    def __init__(
+        self,
+        material,
+        section_mesh,
+        Jx,
+        k=0,
+        name="",
+        *,
+        output_points=None,
+        rotate_mesh=False,
+    ):
+        if (
+            section_mesh.ndim != 2
+            or not isinstance(section_mesh.elm_type, str)
+            or section_mesh.elm_type not in self._quadrature
+        ):
+            raise ValueError(
+                "Use a 2D section mesh with tri3, tri6, quad4, quad8 or quad9 elements"
+            )
+        if not section_mesh.n_elements:
+            raise ValueError("The section mesh must contain at least one element")
+
+        # Work with a copy so centering and normalization leave the input intact.
+        mesh = section_mesh.deepcopy()
+        n_gp = self._quadrature[mesh.elm_type]
+
+        points = mesh.gausspoint_coordinates(n_gp)
+        weights = mesh._get_gaussian_quadrature_mat(n_gp).diagonal()
+
+        area = weights.sum()
+        self.centroid = weights @ points / area
+        points -= self.centroid
+        moments = points.T @ (weights[:, None] * points)
+        yy, zz, yz = moments[0, 0], moments[1, 1], moments[0, 1]
+        angle = 0.0
+        if abs(yz) > 1e-12 * np.sqrt(yy * zz):
+            angle = 0.5 * np.arctan2(2 * yz, yy - zz)
+            angle = (angle + np.pi / 4) % (np.pi / 2) - np.pi / 4
+        nodes = mesh.nodes - self.centroid
+        if abs(angle) <= 1e-10:  # radians; leave nearly aligned coordinates alone
+            angle = 0.0
+        elif rotate_mesh:
+            c, s = np.cos(angle), np.sin(angle)
+            rotation = np.array([[c, -s], [s, c]])
+            points = points @ rotation
+            nodes = nodes @ rotation
+        else:
+            warnings.warn(
+                "The section mesh axes are misaligned with the principal bending "
+                "axes. Beam results may be inaccurate when bending coupling is "
+                "ignored. Set rotate_mesh=True for automatic correction.",
+                stacklevel=2,
+            )
+            angle = 0.0
+        self.principal_angle = angle
+        y, z = points.T
+        self._fibers = y, z, weights
+
+        used_nodes = nodes[np.unique(mesh.elements)]
+        lower, upper = used_nodes.min(axis=0), used_nodes.max(axis=0)
+        scale = np.maximum(-lower, upper)
+        # Make a fresh mesh so no quadrature cached for physical coordinates
+        # is retained on the normalized mesh used for section display.
+        normalized_mesh = Mesh(nodes / scale, mesh.elements, mesh.elm_type)
+        super().__init__(
+            material,
+            area,
+            Jx,
+            weights @ z**2,
+            weights @ y**2,
+            k,
+            name,
+            section_points=used_nodes / scale,
+            section_mesh=normalized_mesh,
+            section_scale=scale,
+            section_bounds=(lower[0], upper[0], lower[1], upper[1]),
+            output_points=output_points,
+        )
+
+    @property
+    def fibers(self):
+        """Section Gauss points and area weights as ``(y, z, weights)``."""
+        return tuple(values.copy() for values in self._fibers)
 
 
 class BeamCircular(BeamProperties):
