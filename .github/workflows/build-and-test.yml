@@ -10,6 +10,23 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    name: build-linux (${{ matrix.backend }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # default solver pypardiso, numpy assembly (no numba)
+          - backend: pardiso
+            add: ""
+            remove: ""
+          # default solver python-mumps (as on macOS / arm), numba kernels
+          - backend: mumps
+            add: "numba"
+            remove: "pypardiso"
+          # optional PETSc (conda-forge build, with MPI and MUMPS), numba kernels
+          - backend: petsc
+            add: "numba petsc4py mpich"
+            remove: ""
 
     steps:
       - uses: actions/checkout@v3
@@ -29,19 +46,52 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CONDA }}/envs
-          key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
+          key: conda-${{ runner.os }}--${{ runner.arch }}--${{ steps.get-date.outputs.today }}-${{ hashFiles('environment.yml') }}-${{ matrix.backend }}-${{ env.CACHE_NUMBER }}
         env:
           # Increase this value to reset cache if environment.yml has not changed
           CACHE_NUMBER: 0
         id: cache
 
       - name: Update environment
-        run: conda env update -n fedoo -f environment.yml
         if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          conda env update -n fedoo -f environment.yml
+          if [ -n "${{ matrix.remove }}" ]; then
+            conda remove -y -n fedoo ${{ matrix.remove }}
+          fi
+          if [ -n "${{ matrix.add }}" ]; then
+            conda install -y -n fedoo -c conda-forge ${{ matrix.add }}
+          fi
 
       - name: Install
         shell: bash -l {0}
         run: pip install .
+
+      - name: Check the optional packages of this job
+        shell: bash -l {0}
+        env:
+          BACKEND: ${{ matrix.backend }}
+        run: |
+          python - <<'EOF'
+          import importlib.util
+          import os
+
+          from fedoo.core import base
+
+          backend = os.environ["BACKEND"]
+          has_numba = importlib.util.find_spec("numba") is not None
+          print(
+            f"pypardiso={base.USE_PYPARDISO} mumps={base.USE_MUMPS}"
+            f" petsc={base.HAS_PETSC} numba={has_numba}"
+          )
+          # a missing package would silently skip the tests it is here for
+          assert base.USE_PYPARDISO == (backend != "mumps")
+          assert base.USE_MUMPS == (backend == "mumps")
+          assert has_numba == (backend != "pardiso")
+          assert base.HAS_PETSC == (backend == "petsc")
+          if backend == "petsc":
+              assert base._petsc().Sys.hasExternalPackage("mumps")
+          EOF
 
       - name: Test
         shell: bash -l {0}

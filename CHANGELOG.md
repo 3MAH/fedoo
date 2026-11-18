@@ -10,7 +10,7 @@ semantic versioning.
 
 - Optional numba kernels for the assembly (used when numba is installed, numpy
   otherwise): fused element products, parallel sum into the global csr matrix,
-  operator times vector products, and elementary operators computed in csr
+  operator times vector products, elementary operators computed in csr
   order in updated lagrangian, and closed-form determinants and inverses of the
   2x2 / 3x3 jacobians. numba is not a dependency: install it yourself.
 - Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly

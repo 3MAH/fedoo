@@ -6,8 +6,10 @@ _KERNELS = []  # [small_det, small_inv] numba kernels, or [None, None]
 
 
 def _kernels():
-    """The numba det/inv kernels, imported on first use (fedoo.core imports
-    this module, so they cannot be imported at load), or (None, None)."""
+    """Return the numba det/inv kernels, or [None, None] without numba.
+
+    Imported on first use: fedoo.core imports this module.
+    """
     if not _KERNELS:
         try:
             from fedoo.core._numba_kernels import small_det, small_inv
@@ -36,7 +38,10 @@ def _as_stack(a):
 
 
 def _small_det(a):
-    """Determinants of a stack of 2x2 or 3x3 matrices, in closed form."""
+    """Determinants of a stack of 2x2 or 3x3 matrices, in closed form.
+
+    Computed by the numba kernel when it applies, with identical results.
+    """
     stack = _as_stack(a)
     if stack is not None:
         out = np.empty(stack.shape[0])
@@ -54,7 +59,8 @@ def _small_det(a):
 def _small_inv(a):
     """Inverses of a stack of square matrices: closed form (adjugate) for 2x2
     and 3x3, numpy.linalg.inv otherwise or if a matrix is singular (which then
-    raises LinAlgError as before)."""
+    raises LinAlgError as before). The closed form is computed by the numba
+    kernel when it applies, with identical results."""
     if a.shape[-1] not in (2, 3) or a.shape[-2] != a.shape[-1]:
         return np.linalg.inv(a)
     stack = _as_stack(a)
