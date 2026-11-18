@@ -33,6 +33,58 @@ def _performance_cores():
         return None
 
 
+class _CsrPattern:
+    """Conversion of coo values on given (row, col) indices to csr values:
+    a permutation, when the coo indices have no duplicate."""
+
+    def __init__(self, row, col, shape):
+        self.row, self.col, self.shape = row, col, shape
+        n = len(row)
+        # coo values = their position + 1, exact in float64
+        m = sparse.coo_matrix(
+            (np.arange(1, n + 1, dtype=np.float64), (row, col)), shape=shape
+        ).tocsr()
+        m.sort_indices()
+        self.valid = m.nnz == n  # no duplicate: the conversion is a permutation
+        self.perm = (m.data - 1).astype(np.int64)
+        self.indices, self.indptr = m.indices, m.indptr
+
+
+_CSR_PATTERNS = {}  # (id(row), id(col), shape) -> _CsrPattern, the last few
+
+
+def _csr_pattern(row, col, shape):
+    """The _CsrPattern of the coo indices (row, col), cached for the same
+    row and col arrays."""
+    key = (id(row), id(col), tuple(shape))
+    pattern = _CSR_PATTERNS.get(key)
+    if pattern is None or pattern.row is not row or pattern.col is not col:
+        pattern = _CsrPattern(row, col, tuple(shape))
+        if len(_CSR_PATTERNS) >= 8:
+            _CSR_PATTERNS.pop(next(iter(_CSR_PATTERNS)))
+        _CSR_PATTERNS[key] = pattern
+    return pattern
+
+
+def _coo_to_csr(data, row, col, shape):
+    """sparse.coo_matrix((data, (row, col)), shape).tocsr(), with sorted
+    indices. For the same row and col arrays (e.g. the elementary operators of
+    a mesh whose nodes move), the conversion is computed once."""
+    pattern = _csr_pattern(row, col, shape)
+    if not pattern.valid:
+        res = sparse.coo_matrix((data, (row, col)), shape=shape).tocsr()
+        res.sort_indices()
+        return res
+    res = sparse.csr_matrix(
+        (np.asarray(data).reshape(-1)[pattern.perm], pattern.indices, pattern.indptr),
+        shape=shape,
+        copy=False,
+    )
+    res.has_sorted_indices = True
+    res._fedoo_pattern = pattern
+    return res
+
+
 class _BlocSparse:
     def __init__(
         self,

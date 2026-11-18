@@ -82,6 +82,11 @@ semantic versioning.
 
 ### Changed
 
+- Assembly: no product by a unit coefficient, Gauss weights applied once to a
+  coefficient shared by several terms, closed-form determinant and inverse of
+  the 2x2 and 3x3 jacobian matrices, and coo to csr conversion of the
+  elementary operators computed once per mesh (updated lagrangian).
+  Results may change at round-off level.
 - The matrix reduced by the boundary conditions keeps a fixed sparsity
   pattern (explicit zeros kept) from the second solve on, and the python-mumps
   context is kept across the solves of a problem: the analysis (ordering and

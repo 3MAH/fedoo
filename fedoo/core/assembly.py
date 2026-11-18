@@ -3,10 +3,11 @@ from copy import copy
 import numpy as np
 from scipy import sparse
 
-from fedoo.core._sparsematrix import RowBlocMatrix
+from fedoo.core._sparsematrix import RowBlocMatrix, _coo_to_csr
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
+from fedoo.core.diffop import _mul_coef
 from fedoo.core.mesh import Mesh
 from fedoo.core.weakform import WeakFormBase, _AssemblyOptions, WeakFormSum
 from fedoo.lib_elements.element_list import (
@@ -330,7 +331,9 @@ class Assembly(AssemblyBase):
                     if (
                         ii > 0 and same_op_as_next[ii - 1]
                     ):  # if same operator as previous with different coef, add the two coef
-                        coef_PG += wf.coef[ii]
+                        coef_PG = (
+                            coef_PG + wf.coef[ii]
+                        )  # not in place: coefs may be shared
                     else:
                         coef_PG = wf.coef[
                             ii
@@ -404,6 +407,7 @@ class Assembly(AssemblyBase):
                 sum_coef = (
                     False  # bool that indicate if operator are the same and can be sum
                 )
+                weighted_coefs = {}  # id(coef) -> (coef, coef * gauss weights)
 
                 if hasattr(self.weakform, "_list_mat_lumping"):
                     change_mat_lumping = (
@@ -439,11 +443,13 @@ class Assembly(AssemblyBase):
                         # if n_elm_gp == 0, coef_PG = nodal values (finite diffirences)
                         coef_PG = wf.coef[ii]
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii], n_elm_gp)
 
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     if sum_coef:  # if same operator as previous with different coef, add the two coef
-                        coef_PG_sum += coef_PG
+                        coef_PG_sum = (
+                            coef_PG_sum + coef_PG
+                        )  # not in place: coefs may be shared
                         sum_coef = False
                     else:
                         coef_PG_sum = coef_PG
@@ -459,9 +465,15 @@ class Assembly(AssemblyBase):
                             sum_coef = True
                             continue
 
-                    coef_PG = (
-                        coef_PG_sum * mat_gaussian_quadrature.data
-                    )  # mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
+                    # an array coef shared by several terms (e.g. a tangent
+                    # component) is weighted once by the quadrature diagonal
+                    weighted = weighted_coefs.get(id(coef_PG_sum))
+                    if weighted is not None and weighted[0] is coef_PG_sum:
+                        coef_PG = weighted[1]
+                    else:
+                        coef_PG = coef_PG_sum * mat_gaussian_quadrature.data
+                        if not np.isscalar(coef_PG_sum):
+                            weighted_coefs[id(coef_PG_sum)] = (coef_PG_sum, coef_PG)
                     # check how it appens with change of variable and rotation dof
 
                     Matvir = self._get_elementary_operator(wf.op_vir[ii])
@@ -540,7 +552,7 @@ class Assembly(AssemblyBase):
                                     MM.addToBlocATB(
                                         Matvir[j],
                                         Mat[i],
-                                        (coef[i] * coef_vir[j]) * coef_PG,
+                                        _mul_coef(coef[i] * coef_vir[j], coef_PG),
                                         var_vir[j],
                                         var[i],
                                         mat_lumping,
@@ -552,7 +564,7 @@ class Assembly(AssemblyBase):
                                         listMatvir[j],
                                         Mat[i],
                                         [
-                                            (coef[i] * coef_vir[j]) * coef_PG
+                                            _mul_coef(coef[i] * coef_vir[j], coef_PG)
                                             for coef_PG in listCoef_PG
                                         ],
                                         var_vir[j],
@@ -639,7 +651,7 @@ class Assembly(AssemblyBase):
                     if np.isscalar(wf.coef[ii]):  # and self.op_vir[ii] != 1:
                         MM = MM + wf.coef[ii] * Matvir * mat_gaussian_quadrature * Mat
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii], n_elm_gp)
                         CoefMatrix = sparse.csr_matrix(
                             (
                                 mat_gaussian_quadrature.data * coef_PG,
@@ -1065,10 +1077,12 @@ class Assembly(AssemblyBase):
 
             op_dd = [
                 [
-                    sparse.coo_matrix(
-                        (data[i][j].reshape(-1), (row, col)),
-                        shape=(n_elements * n_elm_gp, n_col),
-                    ).tocsr()
+                    _coo_to_csr(
+                        data[i][j].reshape(-1),
+                        row,
+                        col,
+                        (n_elements * n_elm_gp, n_col),
+                    )
                     for j in range(NbDoFperNode)
                 ]
                 for i in range(nop)
