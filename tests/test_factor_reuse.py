@@ -225,8 +225,12 @@ def test_mumps_symmetry_mode(monkeypatch, symmetric, expected_sym):
         def __init__(self, sym=None):
             calls.append(sym)
 
-        def factor(self, A):
+        def set_matrix(self, A, symmetric=False):
             matrices.append(A)
+
+        def factor(self, A=None, reuse_analysis=False):
+            if A is not None:
+                matrices.append(A)
 
         def solve(self, B):
             return B
@@ -241,6 +245,14 @@ def test_mumps_symmetry_mode(monkeypatch, symmetric, expected_sym):
     assert calls == [expected_sym, expected_sym]
     expected_A = sp.tril(A, format="csr") if symmetric else A
     assert all((matrix != expected_A).nnz == 0 for matrix in matrices)
+
+
+def test_mumps_threads_follow_the_user_setting(monkeypatch):
+    """fedoo caps the MUMPS threads at 8 unless OMP_NUM_THREADS is set."""
+    monkeypatch.setenv("OMP_NUM_THREADS", "3")
+    assert base._mumps_threads() is None
+    monkeypatch.delenv("OMP_NUM_THREADS")
+    assert 1 <= base._mumps_threads() <= 8
 
 
 def test_set_solver_symmetric_option_and_factor_reuse():

@@ -1,6 +1,36 @@
+import sys
+
 import numpy as np
 from scipy import sparse
 from numbers import Number
+
+
+def _performance_cores():
+    """Number of performance cores of a hybrid Apple chip, None elsewhere.
+
+    The efficiency cores slow down short parallel regions (MUMPS, assembly
+    kernels), whose work is split before it starts: they are left out of the
+    default thread counts.
+    """
+    if sys.platform != "darwin":
+        return None
+    try:
+        import ctypes
+        import ctypes.util
+
+        libc = ctypes.CDLL(ctypes.util.find_library("c"))
+        value, size = ctypes.c_int(0), ctypes.c_size_t(ctypes.sizeof(ctypes.c_int))
+        if libc.sysctlbyname(
+            b"hw.perflevel0.physicalcpu",
+            ctypes.byref(value),
+            ctypes.byref(size),
+            None,
+            0,
+        ):
+            return None
+        return value.value if value.value > 0 else None
+    except Exception:
+        return None
 
 
 class _BlocSparse:

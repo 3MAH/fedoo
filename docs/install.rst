@@ -122,6 +122,11 @@ To be able to launch the fedoo viewer, the module
 
         $ conda install -c conda-forge "libblas=*=*accelerate" python-mumps
 
+    fedoo runs MUMPS on at most 8 threads (performance cores only on Apple
+    chips) unless ``OMP_NUM_THREADS`` is set, and sets ``KMP_BLOCKTIME=1``
+    at import on macOS when pypardiso is absent. Define either variable before
+    importing fedoo to override.
+
     On Linux and Windows x86_64 (Intel or AMD), prefer the MKL variant,
     with pypardiso, which then shares the same MKL::
 

@@ -3,6 +3,7 @@
 Should not be used, excepted to create inherited classes.
 """
 
+import os
 import sys
 
 
@@ -543,6 +544,8 @@ class ProblemBase:
             * 'mumps': force the use of the standalone MUMPS solver
               (python-mumps must be installed). This is the recommended direct
               solver on arm64 platforms where pypardiso is not available.
+              Unless ``OMP_NUM_THREADS`` is set, fedoo gives MUMPS at most
+              8 threads, and at most the performance cores on Apple chips.
             * 'direct_scipy': force the use of the direct scipy solver
               (umfpack if installed)
             * 'petsc': use the petsc methods (iterative or direct). petsc4py
@@ -961,6 +964,19 @@ def _solver_pardiso(A, B, symmetric=False, **kargs):
     return solver.solve(A, B)
 
 
+def _mumps_threads():
+    """Number of OpenMP threads given to MUMPS (ICNTL(16)), or None to keep
+    the OpenMP default. MUMPS gains little beyond about 8 threads and loses
+    a lot on the efficiency cores of a hybrid chip, while the OpenMP default
+    is all the logical cores: at most 8, and at most the performance cores.
+    A user setting of OMP_NUM_THREADS is kept."""
+    if "OMP_NUM_THREADS" in os.environ:
+        return None
+    from fedoo.core._sparsematrix import _performance_cores
+
+    return max(1, min(8, _performance_cores() or os.cpu_count() or 1))
+
+
 def _mumps_context(symmetric):
     """Build a python-mumps ``Context``, symmetric-indefinite if requested.
 
@@ -987,11 +1003,9 @@ def _solver_mumps(A, B, symmetric=False, **kargs):
     # top-level spsolve. For repeated solves on the same A, use
     # `Problem.set_reuse_factorization(True)` to keep the Context alive
     # across calls (see _MumpsFactor).
-    ctx = _mumps_context(symmetric)
-    if symmetric:
-        A = sparse.tril(A, format="csr")
-    ctx.factor(A)
-    return ctx.solve(B)
+    factor = _MumpsFactor(symmetric)
+    factor.factor(A)
+    return factor.solve(B)
 
 
 # =============================================================
@@ -1006,7 +1020,14 @@ class _MumpsFactor:
     def factor(self, A):
         if self._symmetric:
             A = sparse.tril(A, format="csr")
-        self._ctx.factor(A)
+        self._ctx.set_matrix(A)
+        # thread count before the analysis: MUMPS keeps it for the
+        # factorizations (its tree parallelism requires the same one)
+        n_threads = _mumps_threads()
+        instance = getattr(self._ctx, "mumps_instance", None)
+        if n_threads is not None and instance is not None:
+            instance.icntl[16] = n_threads
+        self._ctx.factor()
 
     def solve(self, B):
         return self._ctx.solve(B)

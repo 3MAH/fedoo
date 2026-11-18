@@ -1,3 +1,12 @@
+import importlib.util as _importlib_util
+import os as _os
+import sys as _sys
+
+if _sys.platform == "darwin" and _importlib_util.find_spec("pypardiso") is None:
+    # libomp sleeps its threads after each parallel region on macOS: a 1 ms spin
+    # spares MUMPS the wake-ups. Not with pypardiso, whose MKL reads it too.
+    _os.environ.setdefault("KMP_BLOCKTIME", "1")
+
 from . import (
     constitutivelaw,
     constraint,

@@ -82,6 +82,15 @@ semantic versioning.
 
 ### Changed
 
+- python-mumps, on every platform: the number of threads is set by fedoo
+  (ICNTL(16), at most 8 and at most the performance cores) unless
+  `OMP_NUM_THREADS` is set. MUMPS gains little beyond 8 threads and loses a
+  lot on efficiency cores.
+- macOS: `KMP_BLOCKTIME=1` is set at import (unless already defined, and not
+  when pypardiso is installed). The default of LLVM's OpenMP runtime there
+  (passive wait) puts the threads to sleep between the many short parallel
+  regions of MUMPS, whose LDL^T factorization was about 2.8 times slower on
+  8 threads.
 - Rotations of the stresses, strains and tangent matrices of the constitutive
   laws go through `simcoon.rotate_voigt` (one parallel loop instead of a scipy
   `Rotation` built point by point), and the simcoon batch calls (`umat`,
