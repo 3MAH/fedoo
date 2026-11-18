@@ -16,10 +16,9 @@ def gauss_sum_atb(coefs, a_list, b, out, accumulate):
     a_list: tuple of (n_gp, n_elm, nA) arrays, b: (n_gp, n_elm, nB) array,
     coefs: tuple of (n_gp, n_elm) arrays. out: (n_elm, nA, nB). The operations
     follow the order of the numpy code: sum of the coef * a terms, sum over the
-    Gauss points, accumulation. The fused multiply-add contraction matches
-    numpy's matmul: for a single term, the result is the numpy one bit for bit
-    for the 8 x 8 blocs of hex8. With several terms, numpy sums them without
-    fused multiply-add, so the results agree to rounding only.
+    Gauss points, accumulation. The results agree with numpy to rounding only:
+    its matmul depends on the BLAS library (order of the sums, fused
+    multiply-add).
     """
     n_gp, n_elm, nb = b.shape
     na = a_list[0].shape[2]

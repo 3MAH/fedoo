@@ -10,6 +10,7 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     name: build-linux (${{ matrix.backend }})
     strategy:
       fail-fast: false
@@ -55,13 +56,12 @@ jobs:
       - name: Update environment
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          conda env update -n fedoo -f environment.yml
-          if [ -n "${{ matrix.remove }}" ]; then
-            conda remove -y -n fedoo ${{ matrix.remove }}
-          fi
-          if [ -n "${{ matrix.add }}" ]; then
-            conda install -y -n fedoo -c conda-forge ${{ matrix.add }}
-          fi
+          # one environment file per job, solved in one go
+          cp environment.yml env_job.yml
+          for pkg in ${{ matrix.remove }}; do sed -i "/^  - $pkg\b/d" env_job.yml; done
+          for pkg in ${{ matrix.add }}; do echo "  - $pkg" >> env_job.yml; done
+          cat env_job.yml
+          conda env update -n fedoo -f env_job.yml
 
       - name: Install
         shell: bash -l {0}

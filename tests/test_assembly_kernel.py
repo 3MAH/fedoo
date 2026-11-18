@@ -1,8 +1,7 @@
 """The numba assembly kernel gives the numpy element matrices.
 
-Bit for bit for a single term on hex8 (8 x 8 blocs). Otherwise numpy sums in
-another order (its 4 x 4 path, or the terms without fused multiply-add), so the
-results agree to rounding only.
+To rounding only: numpy sums in an order that depends on its BLAS library and
+on the size of the blocs.
 """
 
 import numpy as np
@@ -25,9 +24,7 @@ def _numpy(coefs, a_list, b, out=None):
         sm._gauss_sum_atb_numba = kernel
 
 
-def _same(x, y, exact):
-    if exact:
-        return np.array_equal(x, y)
+def _same(x, y):
     return np.allclose(x, y, rtol=1e-14, atol=1e-14 * np.abs(y).max())
 
 
@@ -41,15 +38,14 @@ def test_kernel_matches_numpy(n_a, n_b, n_terms):
     b = rng.normal(size=(n_gp, n_elm, n_b))
 
     ref = _numpy(coefs, a_list, b)
-    exact = (n_a, n_b) == (8, 8) and n_terms == 1
-    assert _same(sm._gauss_sum_atb(coefs, a_list, b), ref, exact)
+    assert _same(sm._gauss_sum_atb(coefs, a_list, b), ref)
 
     # accumulation in place in an existing bloc
     out_ref, out = ref.copy(), ref.copy()
     _numpy(coefs, a_list, b, out_ref)
     res = sm._gauss_sum_atb(coefs, a_list, b, out)
     assert res is out
-    assert _same(out, out_ref, exact)
+    assert _same(out, out_ref)
 
 
 def _assembled_matrix(elm_type, assume_sym, nlgeom=False):
