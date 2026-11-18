@@ -477,6 +477,38 @@ class Problem(ProblemBase):
             shape=(m, m),
         )
 
+    def _rigid_body_modes(self):
+        """Rigid body modes of the displacement (and rotation) dof, on the
+        free dof: near null space of a mechanical problem, for the algebraic
+        multigrid preconditioners (PETSc GAMG). None without a "Disp" vector.
+        With multi-point constraints, their projection MatCB.T @ modes."""
+        space = self.space
+        if (
+            self.mesh is None
+            or "Disp" not in space.list_vectors()
+            or len(self._dof_free) == 0
+        ):
+            return None
+        disp = space.get_rank_vector("Disp")
+        ndim = len(disp)
+        rot = None
+        if ndim == 3 and "Rot" in space.list_vectors():
+            rot = space.get_rank_vector("Rot")
+        n_nodes = self.mesh.n_nodes
+        nodes = np.arange(n_nodes)
+        x = self.mesh.nodes[:, :ndim] - self.mesh.nodes[:, :ndim].mean(axis=0)
+        # rotation about the axis: u_i = -x_j, u_j = x_i
+        planes = [(0, 1, 2)] if ndim == 2 else [(0, 1, 2), (1, 2, 0), (2, 0, 1)]
+        modes = np.zeros((self.n_dof, ndim + len(planes)))
+        for i, r in enumerate(disp):
+            modes[r * n_nodes + nodes, i] = 1.0
+        for k, (i, j, axis) in enumerate(planes):
+            modes[disp[i] * n_nodes + nodes, ndim + k] = -x[:, j]
+            modes[disp[j] * n_nodes + nodes, ndim + k] = x[:, i]
+            if rot is not None:
+                modes[rot[axis] * n_nodes + nodes, ndim + k] = 1.0
+        return self._MatCB.T @ modes
+
     def _solve_reduced(self, rhs):
         """Solve the free-dof system for a right-hand side (a
         back-substitution when the factorization of the current matrix is

@@ -86,6 +86,16 @@ semantic versioning.
 
 ### Changed
 
+- PETSc (petsc4py, optional and installed by the user) is detected at import
+  and initialized at its first use, with the options of the command line. The
+  solver is kept across the solves of a problem and its matrix updated in
+  place; `reuse_preconditioner=True` keeps the preconditioner; GAMG gets the
+  rigid body modes as near null space (`near_null_space=True`); `rtol`, `atol`
+  and `max_it` options; `symmetric=True` uses a MUMPS Cholesky factorization.
+  With `-mpi_linear_solver_server` PETSc is initialized when fedoo is
+  imported, and the python-mumps contexts use `MPI_COMM_SELF` under mpiexec.
+- `get_config()["USE_MUMPS"]`; setting `get_config()["USE_PETSC"] = True` (and
+  the other solver switches) failed with a `KeyError`.
 - python-mumps: with an unchanged sparsity pattern the new values are written
   in place into the arrays held by the MUMPS context (no coo conversion nor
   triangle extraction).

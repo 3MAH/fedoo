@@ -3,6 +3,7 @@
 Should not be used, excepted to create inherited classes.
 """
 
+import importlib.util
 import os
 import sys
 
@@ -62,17 +63,15 @@ if not USE_PYPARDISO:
     except ModuleNotFoundError:
         USE_MUMPS = False
 
+# petsc4py is optional, installed by the user: only found here, PETSc itself
+# is initialized at its first use, by _petsc()
+HAS_PETSC = importlib.util.find_spec("petsc4py") is not None
+PETSc = None
+
 if not USE_PYPARDISO and not USE_MUMPS:
-    try:
-        import petsc4py
-
-        petsc4py.init(sys.argv)
-        from petsc4py import PETSc
-
+    USE_PETSC = HAS_PETSC
+    if USE_PETSC:
         USE_UMFPACK = False
-        USE_PETSC = True
-    except ModuleNotFoundError:
-        USE_PETSC = False
 
 if not USE_PYPARDISO and not USE_MUMPS and not USE_PETSC:
     try:
@@ -91,18 +90,55 @@ if not USE_PYPARDISO and not USE_MUMPS and not USE_PETSC and not USE_UMFPACK:
     )
 
 
+def _petsc():
+    """Return the petsc4py.PETSc module, initializing PETSc at the first call.
+
+    PETSc is initialized with the command line, so that the PETSc options
+    given to the script are used (e.g. ``-ksp_type cg -pc_type gamg``,
+    ``-ksp_view``, ``-mpi_linear_solver_server``). The arguments that are not
+    PETSc options (those of the script itself) are not reported at exit.
+    If petsc4py.PETSc has already been imported by the user, its
+    initialization is kept.
+    """
+    global PETSc
+
+    if PETSc is None:
+        try:
+            import petsc4py
+        except ImportError:
+            raise ImportError(
+                "petsc4py is not installed. Install it with conda "
+                '("conda install -c conda-forge petsc4py") or pip ("pip '
+                'install petsc petsc4py", built from sources).'
+            ) from None
+        if "petsc4py.PETSc" not in sys.modules:
+            argv = sys.argv if sys.argv and sys.argv[0] else ["fedoo"]
+            defaults = ["-options_left", "no"]
+            if sys.platform == "darwin":
+                # the System V shared memory of macOS (4 MB by default) is
+                # too small for the linear solver server
+                defaults += ["-mpi_linear_solver_server_use_shared_memory", "false"]
+            # options given on the command line come after, and win
+            petsc4py.init([argv[0], *defaults, *argv[1:]])
+        from petsc4py import PETSc as _PETSc
+
+        PETSc = _PETSc
+    return PETSc
+
+
+# With -mpi_linear_solver_server, the ranks other than 0 serve the solves of
+# rank 0 from the PETSc initialization on: initialize before anything else.
+if HAS_PETSC and "-mpi_linear_solver_server" in sys.argv:
+    _petsc()
+
+
 def _reload_external_solvers(config_dict):
     if config_dict["USE_PYPARDISO"]:
         from pypardiso import spsolve
     if config_dict["USE_MUMPS"]:
         import mumps  # noqa: F401
     if config_dict["USE_PETSC"]:
-        global PETSc
-
-        import petsc4py
-
-        petsc4py.init(sys.argv)
-        from petsc4py import PETSc
+        _petsc()
     if config_dict["USE_UMFPACK"]:
         from scikits.umfpack import spsolve
 
@@ -552,7 +588,11 @@ class ProblemBase:
             * 'direct_scipy': force the use of the direct scipy solver
               (umfpack if installed)
             * 'petsc': use the petsc methods (iterative or direct). petsc4py
-              should be installed.
+              is not a dependency of fedoo and should be installed by the
+              user (e.g. "conda install -c conda-forge petsc4py"). The PETSc
+              solver is kept across the solves of the problem: the symbolic
+              factorization (direct solvers) is reused while the sparsity
+              pattern of the matrix does not change.
             * function: A user spsolve function that should have the signature
               res = solver(A,B,**kargs).
               where A is a scipy sparse matrix and B a 1d numpy array.
@@ -561,9 +601,11 @@ class ProblemBase:
             Use a symmetric-indefinite direct factorization when supported.
             Pardiso uses ``mtype=-2`` and standalone MUMPS uses ``sym=2``
             (python-mumps 0.0.6: the symmetry is given with the matrix).
-            SciPy/UMFPACK, PETSc and user-supplied solvers keep their usual
-            general path. The caller is responsible for ensuring that the
-            reduced system matrix is symmetric.
+            The 'direct' solver through PETSc uses a MUMPS Cholesky
+            (symmetric-indefinite) factorization. SciPy/UMFPACK, 'petsc' and
+            user-supplied solvers keep their usual general path. The caller
+            is responsible for ensuring that the reduced system matrix is
+            symmetric.
         kargs: optional parameters depending on the type of solver
             precond: bool
               Use precond = False to desactivate the diagonal matrix
@@ -581,17 +623,34 @@ class ProblemBase:
             pc_factor_mat_solver_type: str
               Petsc solver for matrix factorization when applicable.
               See the petsc documentation for details about this parameter.
+            reuse_preconditioner: bool
+              Petsc only. Keep the preconditioner built for the first matrix
+              (e.g. a GAMG hierarchy) for the next solves of the problem,
+              the Krylov iterations making up for the difference. The
+              default is False.
+            rtol, atol, max_it: float, float, int
+              Petsc only. Tolerances of the Krylov solver.
+            near_null_space: bool
+              Petsc only. With the GAMG preconditioner, give it the rigid
+              body modes of the problem (near null space), needed for an
+              efficient multigrid on mechanical problems. The default is
+              True.
 
         Notes
         -----
         * To change the many available petsc options, the
           petsc4py.PETSc.Options dict should be imported and modified
-          (see example below).
+          before set_solver (see example below), or the options given on the
+          command line of the script (e.g. ``python script.py -ksp_type cg
+          -pc_type gamg -ksp_converged_reason``).
         * To use the petsc with MPI parallelization (PCMPI), the script
           mpi4py needs to be installed, and the script should be launch in
           command line using mpiexec. For instance:
 
           >>> mpiexec -n 4 python petsc_examples.py -mpi_linear_solver_server -ksp_type cg -pc_type bjacobi
+
+          fedoo initializes PETSc when it is imported in this case: the
+          processes other than the first one only serve the solves.
 
           A performance gain may be observed for very large problems, but
           this method should be avoid for problem with moderate size.
@@ -633,10 +692,10 @@ class ProblemBase:
                 elif USE_MUMPS:
                     solver_func = _solver_mumps
                 elif USE_PETSC:
-                    global PETSc
+                    _petsc()
                     solver_func = _solver_petsc
                     kargs["solver_type"] = "preonly"
-                    kargs["pc_type"] = "lu"
+                    kargs["pc_type"] = "cholesky" if symmetric else "lu"
                     kargs["pc_factor_mat_solver_type"] = "mumps"
                 else:
                     solver_func = sparse.linalg.spsolve
@@ -653,19 +712,7 @@ class ProblemBase:
                 return_info = True
                 precond = kargs.pop("precond", True)
             elif solver == "petsc":
-                global PETSc
-
-                if "PETSc" not in dir():
-                    try:
-                        import petsc4py
-                        from petsc4py import PETSc
-
-                        petsc4py.init(sys.argv)
-                    except ImportError:
-                        raise ImportError(
-                            'PETSc is not installed. Use "pip install mpi4py petsc petsc4py".'
-                        )
-
+                _petsc()
                 solver_func = _solver_petsc
             elif solver == "pardiso":
                 if USE_PYPARDISO:
@@ -694,14 +741,21 @@ class ProblemBase:
         rebuild_factor_context = self._factor_context is not None
         self._solver_symmetric = symmetric
         self.__solver = [solver, solver_func, kargs, return_info, precond]
-        # MUMPS context kept across the solves of the problem (Newton
-        # iterations, time increments) to reuse the analysis of the matrix
+        # MUMPS context or PETSc solver kept across the solves of the problem
+        # to reuse the analysis of the matrix (and the PETSc preconditioner)
         if solver_func is _solver_mumps:
             self._kept_solver = _MumpsFactor(symmetric)
+        elif solver_func is _solver_petsc:
+            self._kept_solver = _PetscSolver(**kargs)
+            self._kept_solver.near_null_space_provider = self._rigid_body_modes
         else:
             self._kept_solver = None
         if rebuild_factor_context:
             self.set_reuse_factorization(True)
+
+    def _rigid_body_modes(self):
+        # near null space of the reduced system (see Problem); None: unknown
+        return None
 
     def _solve(self, A, B):
         if self._factor_context is not None:
@@ -784,7 +838,7 @@ class ProblemBase:
             elif USE_MUMPS:
                 context = _MumpsFactor(self._solver_symmetric)
             elif USE_PETSC:
-                context = _PetscFactor()
+                context = _PetscFactor(self._solver_symmetric)
             else:
                 raise RuntimeError(
                     "Factorization reuse requires pypardiso, python-mumps, "
@@ -935,37 +989,184 @@ class _GlobalDof:
         return self._indptr[self._variable[variable_name]]
 
 
-def _solver_petsc(
-    A,
-    B,
-    solver_type="bcgs",
-    pc_type="eisenstat",
-    pc_factor_mat_solver_type=None,
-    **kargs,
-):
-    global PETSc
+def _solver_petsc(A, B, **kargs):
+    """Solve A x = B with PETSc (a one-shot :class:`_PetscSolver`)."""
+    solver = _PetscSolver(**kargs)
+    solver.factor(A)
+    return solver.solve(B)
 
-    A_petsc = PETSc.Mat().createAIJWithArrays(A.shape, (A.indptr, A.indices, A.data))
-    B_petsc = PETSc.Vec().createWithArray(B)
-    ksp = PETSc.KSP()
-    ksp.create(comm=A_petsc.getComm())
-    ksp.setType(solver_type)
-    pc = ksp.getPC()
-    pc.setType(pc_type)
-    if pc_factor_mat_solver_type is not None:
-        pc.setFactorSolverType(pc_factor_mat_solver_type)
 
-    ksp.setOperators(A_petsc)
-    ksp.setFromOptions()
+class _PetscSolver:
+    """PETSc linear solver (KSP) kept across the solves of a problem.
 
-    res = A_petsc.createVecLeft()
-    ksp.setUp()
+    The PETSc matrix is updated in place while the sparsity pattern of the
+    system does not change, so that PETSc reuses what only depends on the
+    pattern: the ordering and symbolic factorization of a direct solver
+    (MUMPS, ...) or the structures of the preconditioner. With
+    ``reuse_preconditioner=True``, the preconditioner itself (e.g. a GAMG
+    hierarchy) built for the first matrix is kept for the next ones, the
+    Krylov iterations making up for the difference: a Newton iteration then
+    only costs the iterations. Call :meth:`reset_preconditioner` to rebuild
+    it.
 
-    if isinstance(A, (sparse.csr_array, sparse.csr_matrix)):
-        ksp.solve(B_petsc, res)
-    elif isinstance(A, (sparse.csc_array, sparse.csc_matrix)):
-        ksp.solveTranspose(B_petsc, res)
-    return res
+    The objects are created on PETSC_COMM_SELF: the system is held by one
+    process. Use the PETSc linear solver server (``mpiexec -n <np> python
+    script.py -mpi_linear_solver_server -ksp_type cg -pc_type gamg``) to
+    solve it on several MPI processes; the near null space is not passed to
+    the server.
+
+    Parameters
+    ----------
+    solver_type: str, default="bcgs"
+        PETSc KSP type.
+    pc_type: str, default="eisenstat"
+        PETSc preconditioner type.
+    pc_factor_mat_solver_type: str, optional
+        Package of the factorization for the "lu" and "cholesky"
+        preconditioners (e.g. "mumps").
+    reuse_preconditioner: bool, default=False
+        Keep the preconditioner of the first matrix for the next ones.
+    near_null_space: bool, default=True
+        With the GAMG preconditioner, give it the near null space of the
+        problem (rigid body modes of a mechanical problem), which it needs
+        to be efficient for elasticity.
+    rtol, atol, max_it: optional
+        Tolerances of the Krylov solver (PETSc defaults if not given).
+
+    Notes
+    -----
+    The PETSc options of the command line or of petsc4py.PETSc.Options()
+    (e.g. ``ksp_rtol``, ``pc_gamg_threshold``) are applied on top. With the
+    PETSc linear solver server, the solver of the server is only set by these
+    options: the parameters given here are then ignored, with a warning.
+    """
+
+    def __init__(
+        self,
+        solver_type=None,
+        pc_type=None,
+        pc_factor_mat_solver_type=None,
+        reuse_preconditioner=False,
+        rtol=None,
+        atol=None,
+        max_it=None,
+        near_null_space=True,
+        **kargs,
+    ):
+        PETSc = _petsc()
+        given = [
+            name
+            for name, value in (
+                ("solver_type", solver_type),
+                ("pc_type", pc_type),
+                ("pc_factor_mat_solver_type", pc_factor_mat_solver_type),
+                ("rtol", rtol),
+                ("atol", atol),
+                ("max_it", max_it),
+            )
+            if value is not None
+        ]
+        if given and PETSc.Options().hasName("mpi_linear_solver_server"):
+            # PCMPI: the solver of the server only reads the options database
+            warnings.warn(
+                "With -mpi_linear_solver_server, the PETSc solver is set by "
+                "the command line options only (e.g. -ksp_type cg -pc_type "
+                f"gamg -ksp_rtol 1e-8): {', '.join(given)} given to "
+                "set_solver are ignored, and so is the near null space."
+            )
+        solver_type = "bcgs" if solver_type is None else solver_type
+        pc_type = "eisenstat" if pc_type is None else pc_type
+        self._comm = PETSc.COMM_SELF
+        self._ksp = PETSc.KSP().create(comm=self._comm)
+        self._ksp.setType(solver_type)
+        pc = self._ksp.getPC()
+        pc.setType(pc_type)
+        if pc_factor_mat_solver_type is not None:
+            pc.setFactorSolverType(pc_factor_mat_solver_type)
+        if rtol is not None or atol is not None or max_it is not None:
+            self._ksp.setTolerances(rtol=rtol, atol=atol, max_it=max_it)
+        self._ksp.setFromOptions()
+        self._reuse_preconditioner = reuse_preconditioner
+        self._near_null_space = near_null_space
+        self.near_null_space_provider = None  # set by the problem
+        self._mat = None
+        self._pattern = None
+
+    def factor(self, A):
+        """Set the matrix of the next solves (factorized if direct)."""
+        PETSc = _petsc()
+        A = A.tocsr()
+        if not A.has_sorted_indices:
+            A = A.sorted_indices()
+        same = (
+            self._pattern is not None
+            and A.shape == self._pattern[0]
+            and np.array_equal(A.indptr, self._pattern[1])
+            and np.array_equal(A.indices, self._pattern[2])
+        )
+        if same:
+            # same Mat object, new values: PETSc keeps the symbolic data
+            self._mat.zeroEntries()
+            self._mat.setValuesCSR(A.indptr, A.indices, A.data)
+            self._mat.assemble()
+        else:
+            self._pattern = (A.shape, A.indptr.copy(), A.indices.copy())
+            self._mat = PETSc.Mat().createAIJ(
+                A.shape, csr=(A.indptr, A.indices, A.data), comm=self._comm
+            )
+            self._mat.assemble()
+            self._set_near_null_space()
+            # new pattern, possibly new size (boundary conditions, contact):
+            # the data of the previous one are freed, the options kept
+            self._ksp.reset()
+            self._ksp.setOperators(self._mat)
+            self._ksp.getPC().setReusePreconditioner(False)
+        self._ksp.setUp()  # factorization (direct) or preconditioner setup
+        if self._reuse_preconditioner:
+            self._ksp.getPC().setReusePreconditioner(True)
+
+    def _set_near_null_space(self):
+        if not (
+            self._near_null_space
+            and self.near_null_space_provider is not None
+            and self._ksp.getPC().getType() == "gamg"
+        ):
+            return
+        modes = self.near_null_space_provider()
+        if modes is None or modes.shape[0] != self._mat.getSize()[1]:
+            return
+        q = np.linalg.qr(modes)[0]  # PETSc wants orthonormal vectors
+        vectors = []
+        for k in range(q.shape[1]):
+            v = self._mat.createVecRight()
+            v.setArray(np.ascontiguousarray(q[:, k]))
+            vectors.append(v)
+        PETSc = _petsc()
+        self._mat.setNearNullSpace(
+            PETSc.NullSpace().create(vectors=vectors, comm=self._comm)
+        )
+
+    def reset_preconditioner(self):
+        """Rebuild the preconditioner at the next :meth:`factor`."""
+        self._ksp.getPC().setReusePreconditioner(False)
+
+    def solve(self, B):
+        b = self._mat.createVecLeft()
+        b.setArray(np.ascontiguousarray(B, dtype=np.float64).reshape(-1))
+        x = self._mat.createVecRight()
+        self._ksp.solve(b, x)
+        if self._ksp.getConvergedReason() < 0:
+            warnings.warn(
+                "PETSc solver did not converge (reason "
+                f"{self._ksp.getConvergedReason()}, "
+                f"{self._ksp.getIterationNumber()} iterations)"
+            )
+        return x.getArray().copy()
+
+    @property
+    def ksp(self):
+        """The petsc4py KSP object, to change or inspect the solver."""
+        return self._ksp
 
 
 def _solver_pardiso(A, B, symmetric=False, **kargs):
@@ -976,6 +1177,18 @@ def _solver_pardiso(A, B, symmetric=False, **kargs):
     if symmetric:
         A = sparse.triu(A, format="csr")
     return solver.solve(A, B)
+
+
+def _mumps_comm():
+    """MPI communicator of the python-mumps contexts: fedoo solves on one
+    process. Under mpiexec, an MPI build of python-mumps (conda-forge, next to
+    PETSc) would use MPI_COMM_WORLD and wait for the other processes, e.g.
+    those of the PETSc linear solver server, which never come."""
+    try:
+        from mpi4py import MPI
+    except ImportError:
+        return None
+    return MPI.COMM_SELF if MPI.COMM_WORLD.Get_size() > 1 else None
 
 
 def _mumps_threads():
@@ -1002,12 +1215,14 @@ def _mumps_context(symmetric):
     """
     import mumps
 
+    comm = _mumps_comm()
+    kargs = {} if comm is None else {"comm": comm}
     if not symmetric:
-        return mumps.Context(), False
+        return mumps.Context(**kargs), False
     try:
-        return mumps.Context(sym=2), False
+        return mumps.Context(sym=2, **kargs), False
     except TypeError:
-        return mumps.Context(), True
+        return mumps.Context(**kargs), True
 
 
 def _solver_mumps(A, B, symmetric=False, **kargs):
@@ -1116,27 +1331,12 @@ class _PypardisoFactor:
             self._A = None
 
 
-class _PetscFactor:
-    def __init__(self):
-        global PETSc
+class _PetscFactor(_PetscSolver):
+    """Direct factorization by PETSc (MUMPS, Cholesky if symmetric)."""
 
-        self._A_petsc = None
-        self._ksp = PETSc.KSP()
-        self._ksp.create()
-        self._ksp.setType("preonly")
-        pc = self._ksp.getPC()
-        pc.setType("lu")
-        pc.setFactorSolverType("mumps")
-
-    def factor(self, A):
-        self._A_petsc = PETSc.Mat().createAIJWithArrays(
-            A.shape, (A.indptr, A.indices, A.data)
+    def __init__(self, symmetric=False):
+        super().__init__(
+            solver_type="preonly",
+            pc_type="cholesky" if symmetric else "lu",
+            pc_factor_mat_solver_type="mumps",
         )
-        self._ksp.setOperators(self._A_petsc)
-        self._ksp.setUp()  # triggers factorization
-
-    def solve(self, B):
-        B_petsc = PETSc.Vec().createWithArray(B)
-        x = self._A_petsc.createVecLeft()
-        self._ksp.solve(B_petsc, x)
-        return x.getArray().copy()

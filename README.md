@@ -64,9 +64,12 @@ Installation with pip including recommanded dependencies:
 pip install fedoo[all]
 ```
 
-In mac OS make sure to use petsc4py (included in the conda package) or
-scikit-umfpack. To install scikit-umfpack, it is recommanded to use pip
-(the conda package is outdated):
+A fast direct sparse solver is strongly recommended: pypardiso (Intel) or
+python-mumps (any platform, included in the conda package). PETSc (petsc4py)
+is optional and installed by the user, e.g. `conda install -c conda-forge
+petsc4py`, for its iterative solvers and MPI parallelism (see the
+installation page of the documentation). scikit-umfpack is another fallback;
+to install it, it is recommanded to use pip (the conda package is outdated):
 ```
 pip install scikit-umpack>=0.41 
 ```

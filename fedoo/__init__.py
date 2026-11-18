@@ -65,9 +65,14 @@ class get_config:
     The returned information are:
         * 'fedoo version': The current version of fedoo (non modifiable)
         * 'USE_PYPARDISO': bool that define if the pardiso direct solver may be used
-        * 'USE_PETSC': bool that define if the mumps direct solver should be used.
+        * 'USE_MUMPS': bool that define if the standalone MUMPS direct solver
+          (python-mumps) should be used.
+        * 'USE_PETSC': bool that define if PETSc (MUMPS through petsc4py) should
+          be used as direct solver. petsc4py is installed by the user.
         * 'USE_UMFPACK': bool that define if the scikit-umfpack solver may be used
-          Only one between pardiso, petsc and umfpack direct solver may be used.
+          Only one between pardiso, mumps, petsc and umfpack direct solver may
+          be used. The choice applies to the problems whose solver is set
+          afterwards (set_solver or problem creation).
         * 'USE_PYVISTA': bool that define if the pyvista library may be used
         * 'USE_MPL': bool that define if the matplotlib library may be used
         * 'USE_PYVISTA_QT': bool that define if the pyvista_qt library
@@ -93,6 +98,7 @@ class get_config:
         self._dict = {
             "fedoo version": __version__,
             "USE_PYPARDISO": core.base.USE_PYPARDISO,
+            "USE_MUMPS": core.base.USE_MUMPS,
             "USE_PETSC": core.base.USE_PETSC,
             "USE_UMFPACK": core.base.USE_UMFPACK,
             "USE_PYVISTA": core.mesh.USE_PYVISTA,
@@ -117,23 +123,18 @@ class get_config:
     def __setitem__(self, item, value):
         if item == "fedoo version":
             raise ValueError("fedoo version is not modifiable")
-        if item == "USE_PYPARDISO":
-            core.base.USE_PYPARDISO = value
-            if value:
-                core.base.USE_UMFPACK = False
-                core.base.USE_PETSC = False
-                core.base._reload_external_solvers(get_config())
-        elif item == "USE_PETSC":
-            core.base.USE_PETSC = value
-            if value:
-                core.base.USE_PYPARDISO = False
-                core.base.USE_UMFPACK = False
-                core.base._reload_external_solvers(get_config())
-        elif item == "USE_UMFPACK":
-            core.base.USE_UMFPACK = value
-            if value:
-                core.base.USE_PYPARDISO = False
-                core.base.USE_PETSC = False
+        solvers = ("USE_PYPARDISO", "USE_MUMPS", "USE_PETSC", "USE_UMFPACK")
+        if item in solvers:
+            if value and item == "USE_PETSC" and not core.base.HAS_PETSC:
+                raise ImportError(
+                    "petsc4py is not installed. Install it with conda "
+                    '("conda install -c conda-forge petsc4py") or pip.'
+                )
+            setattr(core.base, item, value)
+            if value:  # a single direct solver
+                for other in solvers:
+                    if other != item:
+                        setattr(core.base, other, False)
                 core.base._reload_external_solvers(get_config())
         elif item == "USE_PYVISTA":
             core.mesh.USE_PYVISTA = value
