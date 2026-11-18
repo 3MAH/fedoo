@@ -255,6 +255,35 @@ def test_mumps_threads_follow_the_user_setting(monkeypatch):
     assert 1 <= base._mumps_threads() <= 8
 
 
+def test_mumps_symmetric_legacy_context(monkeypatch):
+    """python-mumps 0.0.6 has no ``sym`` argument: the symmetry is given
+    with the matrix to ``set_matrix``."""
+    calls = []
+
+    class LegacyMumpsContext:
+        def __init__(self):
+            pass
+
+        def set_matrix(self, A, symmetric=False):
+            calls.append(("set_matrix", symmetric, A.nnz))
+
+        def factor(self, A=None, reuse_analysis=False):
+            calls.append(("factor", A, reuse_analysis))
+
+        def solve(self, B):
+            return B
+
+    monkeypatch.setitem(
+        sys.modules, "mumps", SimpleNamespace(Context=LegacyMumpsContext)
+    )
+
+    A = sp.csr_matrix([[2.0, 1.0], [1.0, -1.0]])
+    B = np.ones(2)
+    assert np.array_equal(_solver_mumps(A, B, symmetric=True), B)
+    # full matrix given, set_matrix keeps its upper triangle
+    assert calls == [("set_matrix", True, 4), ("factor", None, False)]
+
+
 def test_set_solver_symmetric_option_and_factor_reuse():
     """The direct solver and its reuse context share the symmetry choice."""
     pb = _build_plate_problem()

@@ -227,6 +227,9 @@ semantic versioning.
 
 ### Fixed
 
+- `set_solver(..., symmetric=True)` with python-mumps 0.0.6, whose `Context`
+  has no `sym` argument, raised `NotImplementedError`: the symmetry is now
+  given with the matrix (`set_matrix(A, symmetric=True)`).
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
   spherical shell compression. Element expressions retain the original mesh's

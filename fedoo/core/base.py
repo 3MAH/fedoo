@@ -556,7 +556,8 @@ class ProblemBase:
               kargs may contains optional parameters.
         symmetric: bool, default=False
             Use a symmetric-indefinite direct factorization when supported.
-            Pardiso uses ``mtype=-2`` and standalone MUMPS uses ``sym=2``.
+            Pardiso uses ``mtype=-2`` and standalone MUMPS uses ``sym=2``
+            (python-mumps 0.0.6: the symmetry is given with the matrix).
             SciPy/UMFPACK, PETSc and user-supplied solvers keep their usual
             general path. The caller is responsible for ensuring that the
             reduced system matrix is symmetric.
@@ -980,22 +981,20 @@ def _mumps_threads():
 def _mumps_context(symmetric):
     """Build a python-mumps ``Context``, symmetric-indefinite if requested.
 
-    The ``sym`` keyword only exists in recent python-mumps releases, so it is
-    passed exclusively when a symmetric factorization is asked for: the
-    general path keeps working with older versions.
+    Return the context and whether the symmetry has to be given with the
+    matrix instead. The ``sym`` keyword only exists in recent python-mumps
+    releases, so it is passed exclusively when a symmetric factorization is
+    asked for. Older releases (0.0.6) take it in ``set_matrix(a,
+    symmetric=True)``, which keeps the upper triangle.
     """
     import mumps
 
     if not symmetric:
-        return mumps.Context()
+        return mumps.Context(), False
     try:
-        return mumps.Context(sym=2)
-    except TypeError as error:
-        raise NotImplementedError(
-            "the installed python-mumps does not support symmetric "
-            "factorization (no 'sym' argument). Upgrade python-mumps, use "
-            "pypardiso, or call set_solver(..., symmetric=False)."
-        ) from error
+        return mumps.Context(sym=2), False
+    except TypeError:
+        return mumps.Context(), True
 
 
 def _solver_mumps(A, B, symmetric=False, **kargs):
@@ -1015,12 +1014,14 @@ def _solver_mumps(A, B, symmetric=False, **kargs):
 class _MumpsFactor:
     def __init__(self, symmetric=False):
         self._symmetric = symmetric
-        self._ctx = _mumps_context(symmetric)
+        self._ctx, self._sym_with_matrix = _mumps_context(symmetric)
 
     def factor(self, A):
-        if self._symmetric:
-            A = sparse.tril(A, format="csr")
-        self._ctx.set_matrix(A)
+        if self._sym_with_matrix:
+            self._ctx.set_matrix(A, symmetric=True)
+        else:
+            A_given = sparse.tril(A, format="csr") if self._symmetric else A
+            self._ctx.set_matrix(A_given)
         # thread count before the analysis: MUMPS keeps it for the
         # factorizations (its tree parallelism requires the same one)
         n_threads = _mumps_threads()
