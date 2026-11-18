@@ -82,6 +82,11 @@ semantic versioning.
 
 ### Changed
 
+- Rotations of the stresses, strains and tangent matrices of the constitutive
+  laws go through `simcoon.rotate_voigt` (one parallel loop instead of a scipy
+  `Rotation` built point by point), and the simcoon batch calls (`umat`,
+  `objective_rate`, `Lt_convert`, `rotate_voigt`) run on
+  `fedoo.get_config()["N_THREADS"]` threads (0, the default: all the cores).
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to

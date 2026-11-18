@@ -65,6 +65,9 @@ class get_config:
            may be used for background plotter. If True, it is the default plotter
            for DataSet objects.
         * 'USE_PANDAS': bool that define if the pandas library may be used
+        * 'N_THREADS': int, number of threads of the simcoon batch calls (constitutive
+          laws, objective rates, tangent conversions). 0 (default) uses all the cores,
+          1 runs them serially.
 
     To change a configuration option use fedoo.get_config()[option] = value
     To print the current configuration use: fedoo.show_config()
@@ -86,6 +89,7 @@ class get_config:
             "USE_MPL": core.dataset.USE_MPL,
             "USE_PYVISTA_QT": core.dataset.USE_PYVISTA_QT,
             "USE_PANDAS": core.dataset.USE_PANDAS,
+            "N_THREADS": core.base.N_THREADS,
         }
 
     def __repr__(self):
@@ -131,6 +135,12 @@ class get_config:
             core.mesh.USE_PYVISTA_QT = value
         elif item == "USE_PANDAS":
             core.dataset.USE_PANDAS = value
+        elif item == "N_THREADS":
+            if isinstance(value, bool) or int(value) != value or value < 0:
+                raise ValueError(
+                    "N_THREADS must be a non-negative integer (0 = all cores)"
+                )
+            core.base.N_THREADS = int(value)
         else:
             raise KeyError
 

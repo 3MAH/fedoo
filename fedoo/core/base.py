@@ -36,6 +36,10 @@ class InvalidKinematicStateError(RuntimeError):
     pass
 
 
+# Number of threads of the simcoon batch calls (umat, objective_rate, Lt_convert,
+# rotate_voigt): 0 uses all the cores. Set it with fedoo.get_config()["N_THREADS"] = n.
+N_THREADS = 0
+
 # try to find the best available direct solver
 try:
     from pypardiso import spsolve

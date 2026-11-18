@@ -1,8 +1,8 @@
 """J2 plasticity with isotropic hardening, additive on the strain measure."""
 
 import numpy as np
-from simcoon import Rotation as SimRotation
 
+from fedoo.core._simcoon import rotate_voigt
 from fedoo.core.mechanical3d import MechanicalUMAT
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
@@ -468,12 +468,7 @@ class ElastoPlasticity(MechanicalUMAT):
         plasticity_old = statev_start[0]
         plastic_strain_old = statev_start[1:7]
 
-        increments = np.asarray(DR, dtype=float)
-        if increments.ndim == 2:
-            rotation = SimRotation.from_matrix(increments)
-        else:
-            rotation = SimRotation.from_matrix(increments.transpose(2, 0, 1))
-        plastic_strain_old = rotation.apply_strain(plastic_strain_old)
+        plastic_strain_old = rotate_voigt(plastic_strain_old, DR, "strain")
 
         total_strain = strain + dstrain
         initialization_without_hardening = (
