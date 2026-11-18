@@ -401,6 +401,32 @@ def test_set_solver_symmetric_option_and_factor_reuse():
         assert pb._ProblemBase__solver[1] is _solver_mumps
 
 
+@pytest.mark.skipif(not USE_MUMPS, reason="python-mumps not installed")
+def test_direct_solver_is_symmetric_when_the_assemblies_assume_it():
+    """Without a choice, python-mumps factorizes LDL^T when every assembly is
+    assembled as symmetric, and LU as soon as one is not."""
+    reference = _build_plate_problem()
+    reference.set_solver("direct", symmetric=False)
+    reference.solve()
+
+    pb = _build_plate_problem()
+    assert pb._solver_auto_symmetric and pb._solver_symmetric is False
+    pb.solve()
+    assert pb._solver_symmetric is True
+    assert pb._kept_solver._symmetric is True
+    np.testing.assert_allclose(pb.get_disp(), reference.get_disp(), rtol=1e-9)
+
+    pb.assembly.assume_sym = False
+    pb.solve()
+    assert pb._solver_symmetric is False
+    assert pb._kept_solver._symmetric is False
+    np.testing.assert_allclose(pb.get_disp(), reference.get_disp(), rtol=1e-9)
+
+    pb.set_solver("direct", symmetric=True)  # an explicit choice is kept
+    pb.solve()
+    assert pb._solver_symmetric is True and not pb._solver_auto_symmetric
+
+
 def test_set_solver_symmetric_requires_bool():
     pb = _build_plate_problem()
     with pytest.raises(TypeError, match="bool expected"):

@@ -188,3 +188,62 @@ def elementary_operator_values(inv_jac, dshape, shape, perm, n_gp, n_nodes, out)
             for c in range(d_ref):
                 s += inv_jac[e, g, i, c] * dshape[g, c, k]
             out[1 + i, p] = s
+
+
+@njit(parallel=True, cache=True)
+def small_det(a, out):
+    """out[k] = det(a[k]) for a (n, d, d) array, d = 2 or 3, in closed form.
+
+    Same operations, in the same order, as the numpy closed form of
+    fedoo.lib_elements.element_base._small_det: the results are identical.
+    """
+    if a.shape[1] == 2:
+        for k in prange(a.shape[0]):
+            out[k] = a[k, 0, 0] * a[k, 1, 1] - a[k, 0, 1] * a[k, 1, 0]
+    else:
+        for k in prange(a.shape[0]):
+            out[k] = (
+                a[k, 0, 0] * (a[k, 1, 1] * a[k, 2, 2] - a[k, 1, 2] * a[k, 2, 1])
+                + a[k, 0, 1] * (a[k, 1, 2] * a[k, 2, 0] - a[k, 1, 0] * a[k, 2, 2])
+                + a[k, 0, 2] * (a[k, 1, 0] * a[k, 2, 1] - a[k, 1, 1] * a[k, 2, 0])
+            )
+
+
+@njit(parallel=True, cache=True)
+def small_inv(a, out):
+    """out[k] = inv(a[k]) for a (n, d, d) array, d = 2 or 3, by the adjugate.
+
+    Same operations as the numpy closed form of _small_inv (identical
+    results). Returns False if a determinant is zero (out is then partial).
+    """
+    n = a.shape[0]
+    singular = 0
+    if a.shape[1] == 2:
+        for k in prange(n):
+            d = a[k, 0, 0] * a[k, 1, 1] - a[k, 0, 1] * a[k, 1, 0]
+            if d == 0.0:
+                singular += 1
+                continue
+            out[k, 0, 0] = a[k, 1, 1] / d
+            out[k, 0, 1] = -a[k, 0, 1] / d
+            out[k, 1, 0] = -a[k, 1, 0] / d
+            out[k, 1, 1] = a[k, 0, 0] / d
+    else:
+        for k in prange(n):
+            c00 = a[k, 1, 1] * a[k, 2, 2] - a[k, 1, 2] * a[k, 2, 1]
+            c10 = a[k, 1, 2] * a[k, 2, 0] - a[k, 1, 0] * a[k, 2, 2]
+            c20 = a[k, 1, 0] * a[k, 2, 1] - a[k, 1, 1] * a[k, 2, 0]
+            d = a[k, 0, 0] * c00 + a[k, 0, 1] * c10 + a[k, 0, 2] * c20
+            if d == 0.0:
+                singular += 1
+                continue
+            out[k, 0, 0] = c00 / d
+            out[k, 1, 0] = c10 / d
+            out[k, 2, 0] = c20 / d
+            out[k, 0, 1] = (a[k, 0, 2] * a[k, 2, 1] - a[k, 0, 1] * a[k, 2, 2]) / d
+            out[k, 1, 1] = (a[k, 0, 0] * a[k, 2, 2] - a[k, 0, 2] * a[k, 2, 0]) / d
+            out[k, 2, 1] = (a[k, 0, 1] * a[k, 2, 0] - a[k, 0, 0] * a[k, 2, 1]) / d
+            out[k, 0, 2] = (a[k, 0, 1] * a[k, 1, 2] - a[k, 0, 2] * a[k, 1, 1]) / d
+            out[k, 1, 2] = (a[k, 0, 2] * a[k, 1, 0] - a[k, 0, 0] * a[k, 1, 2]) / d
+            out[k, 2, 2] = (a[k, 0, 0] * a[k, 1, 1] - a[k, 0, 1] * a[k, 1, 0]) / d
+    return singular == 0

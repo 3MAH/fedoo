@@ -181,3 +181,26 @@ def test_elementary_operators_numba_match_general_path(space, elm_type):
             assert np.allclose(
                 A.data, B.data, rtol=1e-13, atol=1e-13 * abs(B.data).max()
             )
+
+
+@pytest.mark.parametrize("shape", [(40, 8, 3, 3), (40, 4, 2, 2), (5, 3, 3)])
+def test_small_det_inv_numba_match_numpy(shape):
+    import fedoo.lib_elements.element_base as eb
+
+    rng = np.random.default_rng(0)
+    d = shape[-1]
+    a = rng.random(shape) + np.eye(d)
+    a_strided = np.swapaxes(a, 0, 1) if a.ndim == 4 else a[::-1]
+    for x in (a, a_strided):
+        det, inv = eb._small_det(x), eb._small_inv(x)
+        kernels = list(eb._kernels())
+        eb._KERNELS[:] = [None, None]
+        try:
+            assert np.array_equal(det, eb._small_det(x))
+            assert np.array_equal(inv, eb._small_inv(x))
+        finally:
+            eb._KERNELS[:] = kernels
+
+    a[1] = 0.0  # singular: same error as numpy
+    with pytest.raises(np.linalg.LinAlgError):
+        eb._small_inv(a)

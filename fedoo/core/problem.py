@@ -477,6 +477,18 @@ class Problem(ProblemBase):
             shape=(m, m),
         )
 
+    def _assume_sym(self):
+        """True if every leaf assembly of the problem is assembled with
+        ``assume_sym=True``. An assembly that does not say so (a constraint
+        with its own matrix, an unresolved option) counts as nonsymmetric."""
+        assembly = getattr(self, "assembly", None)
+        if assembly is None or not hasattr(assembly, "iter_leaf"):
+            return False
+        leaves = list(assembly.iter_leaf())
+        return bool(leaves) and all(
+            getattr(leaf, "assume_sym", None) is True for leaf in leaves
+        )
+
     def _rigid_body_modes(self):
         """Rigid body modes of the displacement (and rotation) dof, on the
         free dof: near null space of a mechanical problem, for the algebraic

@@ -556,7 +556,7 @@ class ProblemBase:
         return self._global_dof.n_dof
 
     def set_solver(
-        self, solver: str = "direct", symmetric: bool = False, **kargs
+        self, solver: str = "direct", symmetric: bool | None = None, **kargs
     ):  # tol: float = 1e-5, precond: bool = True):
         """Define the solver for the linear system resolution.
 
@@ -597,8 +597,24 @@ class ProblemBase:
               res = solver(A,B,**kargs).
               where A is a scipy sparse matrix and B a 1d numpy array.
               kargs may contains optional parameters.
-        symmetric: bool, default=False
-            Use a symmetric-indefinite direct factorization when supported.
+        symmetric: bool, optional
+            Use a symmetric-indefinite direct factorization (LDL^T) when
+            supported. It handles the indefinite matrices of Lagrange
+            multipliers and mixed formulations, at about half the work of LU.
+
+            * None (default): automatic with the 'direct' solver of
+              python-mumps. LDL^T is used when every assembly of the problem
+              is assembled with ``assume_sym=True`` (the default of the weak
+              forms whose tangent matrix is symmetric), LU otherwise, e.g.
+              as soon as a weak form declares a nonsymmetric tangent or a
+              constraint adds its own assembly. The choice is made again at
+              each solve. The other solvers keep the general path.
+            * True: always. Only one triangle of the matrix is read: with a
+              nonsymmetric tangent forced to ``assume_sym=True``, the
+              diagonal blocks are not symmetrized by the assembly and the
+              factorization then solves with one triangle of them.
+            * False: never (LU).
+
             Pardiso uses ``mtype=-2`` and standalone MUMPS uses ``sym=2``
             (python-mumps 0.0.6: the symmetry is given with the matrix).
             The 'direct' solver through PETSc uses a MUMPS Cholesky
@@ -673,8 +689,13 @@ class ProblemBase:
           >>> # Use the symmetric-indefinite Pardiso or standalone MUMPS path
           >>> pb.set_solver('direct', symmetric=True)
         """
-        if not isinstance(symmetric, bool):
-            raise TypeError("bool expected for symmetric")
+        if symmetric is not None and not isinstance(symmetric, bool):
+            raise TypeError(
+                "bool expected for symmetric, or None for the automatic choice"
+            )
+        # None: decided at each solve from the assemblies (see _solve)
+        auto_symmetric = symmetric is None
+        symmetric = bool(symmetric)
 
         # These options apply only to PETSc. Treat None as "not specified" so
         # callers can forward optional solver settings to any backend.
@@ -740,6 +761,7 @@ class ProblemBase:
 
         rebuild_factor_context = self._factor_context is not None
         self._solver_symmetric = symmetric
+        self._solver_auto_symmetric = auto_symmetric and solver_func is _solver_mumps
         self.__solver = [solver, solver_func, kargs, return_info, precond]
         # MUMPS context or PETSc solver kept across the solves of the problem
         # to reuse the analysis of the matrix (and the PETSc preconditioner)
@@ -757,7 +779,19 @@ class ProblemBase:
         # near null space of the reduced system (see Problem); None: unknown
         return None
 
+    def _assume_sym(self):
+        # True if the matrix of the problem is assembled as symmetric
+        return False
+
     def _solve(self, A, B):
+        if self._solver_auto_symmetric:
+            symmetric = self._assume_sym()
+            if symmetric != self._solver_symmetric:
+                self._solver_symmetric = symmetric
+                self.__solver[2]["symmetric"] = symmetric
+                self._kept_solver = _MumpsFactor(symmetric)
+                if self._factor_context is not None:
+                    self.set_reuse_factorization(True)
         if self._factor_context is not None:
             if not self._factor_valid:
                 self._factor_context.factor(A)

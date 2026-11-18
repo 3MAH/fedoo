@@ -11,7 +11,8 @@ semantic versioning.
 - Optional numba kernels for the assembly (used when numba is installed, numpy
   otherwise): fused element products, parallel sum into the global csr matrix,
   operator times vector products, and elementary operators computed in csr
-  order in updated lagrangian. numba is not a dependency: install it yourself.
+  order in updated lagrangian, and closed-form determinants and inverses of the
+  2x2 / 3x3 jacobians. numba is not a dependency: install it yourself.
 - Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
   (``tests/test_simcoon_integrator_options.py``): the closest point lands on the
   cutting-plane state, ``ncp="min"`` runs under both integrators, a law without a
@@ -86,6 +87,11 @@ semantic versioning.
 
 ### Changed
 
+- **`set_solver(symmetric=None)` is the default** (was `False`): with the
+  direct solver of python-mumps, a symmetric-indefinite LDL^T factorization
+  is used when every assembly of the problem is assembled with
+  `assume_sym=True`, and LU otherwise. The choice is made at each solve;
+  `symmetric=False` forces LU. Results change at round-off level.
 - PETSc (petsc4py, optional and installed by the user) is detected at import
   and initialized at its first use, with the options of the command line. The
   solver is kept across the solves of a problem and its matrix updated in
@@ -351,6 +357,15 @@ semantic versioning.
   (with `nlgeom="UL"`).
 - Update links to gallery pages: example pages moved from numbered folders
   (`examples/01-simple/...`) to topical ones (`examples/basic/...`).
+
+### Planned improvements
+
+- **Pardiso** (pypardiso, Intel): none of the solver changes above was
+  measured with it. Keep the Pardiso solver across the Newton iterations and
+  redo only the numerical factorization (phase 22) while the sparsity pattern
+  does not change, as done for python-mumps; check the number of MKL threads
+  on hybrid Intel chips; measure LDL^T against LU before extending the
+  automatic symmetric factorization to Pardiso.
 
 ## [1.1.0] - 2026-10-14
 

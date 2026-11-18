@@ -2,9 +2,46 @@ from itertools import product
 
 import numpy as np
 
+_KERNELS = []  # [small_det, small_inv] numba kernels, or [None, None]
+
+
+def _kernels():
+    """The numba det/inv kernels, imported on first use (fedoo.core imports
+    this module, so they cannot be imported at load), or (None, None)."""
+    if not _KERNELS:
+        try:
+            from fedoo.core._numba_kernels import small_det, small_inv
+        except ImportError:
+            small_det = small_inv = None
+        _KERNELS.extend((small_det, small_inv))
+    return _KERNELS
+
+
+def _as_stack(a):
+    """(..., d, d) float64 array as a C contiguous (n, d, d) stack, or None if
+    the numba kernels do not apply."""
+    if (
+        a.dtype != np.float64
+        or a.ndim < 2
+        or a.shape[-1] not in (2, 3)
+        or a.shape[-2] != a.shape[-1]
+        or a.size == 0
+        or _kernels()[0] is None
+    ):
+        return None
+    from fedoo.core._sparsematrix import _set_numba_threads
+
+    _set_numba_threads()
+    return np.ascontiguousarray(a).reshape(-1, a.shape[-1], a.shape[-1])
+
 
 def _small_det(a):
     """Determinants of a stack of 2x2 or 3x3 matrices, in closed form."""
+    stack = _as_stack(a)
+    if stack is not None:
+        out = np.empty(stack.shape[0])
+        _kernels()[0](stack, out)
+        return out.reshape(a.shape[:-2])
     if a.shape[-1] == 2:
         return a[..., 0, 0] * a[..., 1, 1] - a[..., 0, 1] * a[..., 1, 0]
     return (
@@ -20,6 +57,12 @@ def _small_inv(a):
     raises LinAlgError as before)."""
     if a.shape[-1] not in (2, 3) or a.shape[-2] != a.shape[-1]:
         return np.linalg.inv(a)
+    stack = _as_stack(a)
+    if stack is not None:
+        out = np.empty_like(stack)
+        if not _kernels()[1](stack, out):
+            return np.linalg.inv(a)
+        return out.reshape(a.shape)
     inv = np.empty_like(a)
     if a.shape[-1] == 2:
         inv[..., 0, 0] = a[..., 1, 1]
