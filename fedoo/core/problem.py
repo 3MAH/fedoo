@@ -3,6 +3,7 @@ import numpy as np
 import scipy.sparse as sparse
 
 from fedoo.core.base import ProblemBase, AssemblyBase
+from fedoo.core._sparsematrix import _csr_matvec
 from fedoo.core.output import _ProblemOutput, _get_results
 
 
@@ -472,7 +473,7 @@ class Problem(ProblemBase):
             red["op"], red["indices"], red["indptr"] = _reduction_operator(A, mat_cb)
         m = mat_cb.shape[1]
         return type(A)(
-            (red["op"] @ A.data, red["indices"], red["indptr"]),
+            (_csr_matvec(red["op"], A.data), red["indices"], red["indptr"]),
             shape=(m, m),
         )
 

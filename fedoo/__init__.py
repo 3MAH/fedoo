@@ -75,8 +75,9 @@ class get_config:
            for DataSet objects.
         * 'USE_PANDAS': bool that define if the pandas library may be used
         * 'N_THREADS': int, number of threads of the simcoon batch calls (constitutive
-          laws, objective rates, tangent conversions). 0 (default) uses all the cores,
-          1 runs them serially.
+          laws, objective rates, tangent conversions) and of the numba kernels of
+          the assembly. 0 (default) uses all the cores (the performance cores of an
+          Apple chip for numba), 1 runs them serially.
 
     To change a configuration option use fedoo.get_config()[option] = value
     To print the current configuration use: fedoo.show_config()

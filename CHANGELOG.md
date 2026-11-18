@@ -8,6 +8,10 @@ semantic versioning.
 
 ### Added
 
+- Optional numba kernels for the assembly (used when numba is installed, numpy
+  otherwise): fused element products, parallel sum into the global csr matrix,
+  operator times vector products, and elementary operators computed in csr
+  order in updated lagrangian. numba is not a dependency: install it yourself.
 - Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
   (``tests/test_simcoon_integrator_options.py``): the closest point lands on the
   cutting-plane state, ``ncp="min"`` runs under both integrators, a law without a
