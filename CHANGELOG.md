@@ -86,6 +86,9 @@ semantic versioning.
 
 ### Changed
 
+- python-mumps: with an unchanged sparsity pattern the new values are written
+  in place into the arrays held by the MUMPS context (no coo conversion nor
+  triangle extraction).
 - Assembly: no product by a unit coefficient, Gauss weights applied once to a
   coefficient shared by several terms, closed-form determinant and inverse of
   the 2x2 and 3x3 jacobian matrices, and coo to csr conversion of the

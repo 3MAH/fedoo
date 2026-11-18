@@ -1033,6 +1033,8 @@ class _MumpsFactor:
         self._symmetric = symmetric
         self._ctx, self._sym_with_matrix = _mumps_context(symmetric)
         self._pattern = None
+        # positions in A.data of the values held by the context (same pattern)
+        self._entries = None
 
     def factor(self, A):
         A = A.tocsr()
@@ -1042,6 +1044,12 @@ class _MumpsFactor:
             and np.array_equal(A.indptr, self._pattern[1])
             and np.array_equal(A.indices, self._pattern[2])
         )
+        if same and self._entries is not None:
+            # MUMPS points to the arrays given by set_matrix: new values are
+            # written in place, without its coo conversion and triangle extraction
+            np.take(A.data, self._entries, out=self._ctx.data)
+            self._ctx.factor(reuse_analysis=True)
+            return
         if not same:
             self._pattern = (A.shape, A.indptr.copy(), A.indices.copy())
         if self._sym_with_matrix:
@@ -1057,6 +1065,28 @@ class _MumpsFactor:
             if n_threads is not None and instance is not None:
                 instance.icntl[16] = n_threads
         self._ctx.factor(reuse_analysis=same)
+        self._entries = self._given_entries(A)
+
+    def _given_entries(self, A):
+        """Positions in A.data of the values that set_matrix gave to MUMPS
+        (coo order of the full matrix or of the triangle kept), or None if
+        they cannot be identified (the values are then always set by
+        set_matrix)."""
+        data = getattr(self._ctx, "data", None)
+        if not isinstance(data, np.ndarray) or data.dtype != A.data.dtype:
+            return None
+        if not data.flags.writeable or not data.flags.c_contiguous:
+            return None
+        rows = np.repeat(np.arange(A.shape[0]), np.diff(A.indptr))
+        if self._sym_with_matrix:
+            entries = np.flatnonzero(A.indices >= rows)  # upper triangle
+        elif self._symmetric:
+            entries = np.flatnonzero(A.indices <= rows)  # lower triangle
+        else:
+            entries = np.arange(A.nnz)
+        if len(entries) != len(data) or not np.array_equal(A.data[entries], data):
+            return None
+        return entries
 
     def solve(self, B):
         return self._ctx.solve(B)

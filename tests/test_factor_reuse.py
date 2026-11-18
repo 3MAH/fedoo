@@ -311,6 +311,34 @@ def test_mumps_factor_reuses_analysis_on_same_pattern(monkeypatch):
     assert reuse == [False, True, True, False, True]
 
 
+@pytest.mark.skipif(not USE_MUMPS, reason="python-mumps not installed")
+@pytest.mark.parametrize("symmetric", [False, True])
+def test_mumps_values_updated_in_place(symmetric):
+    """With an unchanged pattern, the new values are written into the arrays
+    held by the python-mumps context (no set_matrix): same solutions."""
+    from scipy.sparse.linalg import spsolve
+
+    n = 60
+    A = sp.random(n, n, density=0.15, random_state=3, format="csr")
+    A = (A + A.T + 10 * sp.eye(n)).tocsr()
+    A.sort_indices()
+    b = np.arange(n, dtype=float)
+    factor = _MumpsFactor(symmetric)
+    factor.factor(A)
+    assert factor._entries is not None
+    for scale in (2.0, 0.5):
+        M = A.copy()
+        M.data = M.data * (1 + 0.3 * np.cos(scale * np.arange(M.nnz)))
+        M = ((M + M.T) * 0.5).tocsr()
+        M.sort_indices()
+        assert np.array_equal(M.indices, A.indices)
+        factor.factor(M)
+        ref = spsolve(M.tocsc(), b)
+        assert np.allclose(
+            factor.solve(b), ref, rtol=1e-10, atol=1e-12 * abs(ref).max()
+        )
+
+
 @pytest.mark.parametrize("seed", [0, 1])
 def test_reduction_operator_matches_product(seed):
     """The fixed-pattern reduction gives MatCB.T A MatCB, with a pattern that
