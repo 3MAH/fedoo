@@ -284,6 +284,81 @@ def test_mumps_symmetric_legacy_context(monkeypatch):
     assert calls == [("set_matrix", True, 4), ("factor", None, False)]
 
 
+def test_mumps_factor_reuses_analysis_on_same_pattern(monkeypatch):
+    """The analysis is reused only while the sparsity pattern is unchanged,
+    explicit zeros included."""
+    reuse = []
+
+    class FakeMumpsContext:
+        def set_matrix(self, A, symmetric=False):
+            pass
+
+        def factor(self, A=None, reuse_analysis=False):
+            reuse.append(reuse_analysis)
+
+        def solve(self, B):
+            return B
+
+    monkeypatch.setitem(sys.modules, "mumps", SimpleNamespace(Context=FakeMumpsContext))
+
+    A = sp.csr_matrix([[2.0, 1.0], [1.0, -1.0]])
+    A_zero = A.copy()
+    A_zero.data[1] = 0.0  # explicit zero: same pattern
+    A_other = sp.csr_matrix([[2.0, 0.0], [1.0, -1.0]])
+    factor = _MumpsFactor()
+    for M in (A, 3.0 * A, A_zero, A_other, A_other):
+        factor.factor(M)
+    assert reuse == [False, True, True, False, True]
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+def test_reduction_operator_matches_product(seed):
+    """The fixed-pattern reduction gives MatCB.T A MatCB, with a pattern that
+    does not depend on the values of A."""
+    from fedoo.core.problem import _reduction_operator
+
+    rng = np.random.default_rng(seed)
+    n = 40
+    A = sp.random(n, n, density=0.2, random_state=seed, format="csr")
+    A = (A + A.T + sp.eye(n)).tocsr()
+    # free dof (identity), blocked dof (empty rows) and MPC rows
+    free = np.sort(rng.choice(n, 25, replace=False))
+    slave = np.setdiff1d(np.arange(n), free)[:8]
+    rows = list(free) + list(np.repeat(slave, 2))
+    cols = list(range(25)) + list(rng.integers(0, 25, 2 * len(slave)))
+    vals = [1.0] * 25 + list(rng.normal(size=2 * len(slave)))
+    mat_cb = sp.coo_matrix((vals, (rows, cols)), shape=(n, 25)).tocsc()
+
+    op, indices, indptr = _reduction_operator(A, mat_cb)
+    for data in (A.data, rng.normal(size=A.nnz), np.zeros(A.nnz)):
+        Ad = sp.csr_matrix((data, A.indices, A.indptr), shape=A.shape)
+        R = sp.csr_matrix((op @ data, indices, indptr), shape=(25, 25))
+        ref = (mat_cb.T @ Ad @ mat_cb).toarray()
+        assert np.allclose(R.toarray(), ref, rtol=1e-12, atol=1e-12)
+        assert R.nnz == len(indices)  # zeros kept: fixed pattern
+
+
+def test_reduced_matrix_pattern_is_fixed():
+    """Repeated reductions with the same pattern of A keep the same pattern."""
+    pb = _build_plate_problem()
+    pb.solve()
+    A = pb.get_A()
+    assert A.format == "csr"
+    patterns = []
+    for scale in (1.0, 2.0, 0.5):
+        A2 = A.copy()
+        A2.data *= scale
+        A2.data[::7] = 0.0  # values that would be dropped by the product
+        pb.set_A(A2)
+        R = pb._reduced_system_matrix()
+        ref = pb._MatCB.T @ A2 @ pb._MatCB
+        assert abs(R - ref).max() <= 1e-12 * abs(ref).max()
+        patterns.append((R.indptr.copy(), R.indices.copy()))
+    # first call: plain product; the operator is built the second time
+    assert np.array_equal(patterns[1][0], patterns[2][0])
+    assert np.array_equal(patterns[1][1], patterns[2][1])
+
+
 def test_set_solver_symmetric_option_and_factor_reuse():
     """The direct solver and its reuse context share the symmetry choice."""
     pb = _build_plate_problem()

@@ -82,6 +82,10 @@ semantic versioning.
 
 ### Changed
 
+- The matrix reduced by the boundary conditions keeps a fixed sparsity
+  pattern (explicit zeros kept) from the second solve on, and the python-mumps
+  context is kept across the solves of a problem: the analysis (ordering and
+  symbolic factorization) is reused while the pattern does not change.
 - python-mumps, on every platform: the number of threads is set by fedoo
   (ICNTL(16), at most 8 and at most the performance cores) unless
   `OMP_NUM_THREADS` is set. MUMPS gains little beyond 8 threads and loses a

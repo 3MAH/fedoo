@@ -546,6 +546,9 @@ class ProblemBase:
               solver on arm64 platforms where pypardiso is not available.
               Unless ``OMP_NUM_THREADS`` is set, fedoo gives MUMPS at most
               8 threads, and at most the performance cores on Apple chips.
+              Its analysis (ordering, symbolic factorization) is reused
+              across the solves of a problem while the sparsity pattern of
+              the matrix does not change.
             * 'direct_scipy': force the use of the direct scipy solver
               (umfpack if installed)
             * 'petsc': use the petsc methods (iterative or direct). petsc4py
@@ -691,6 +694,12 @@ class ProblemBase:
         rebuild_factor_context = self._factor_context is not None
         self._solver_symmetric = symmetric
         self.__solver = [solver, solver_func, kargs, return_info, precond]
+        # MUMPS context kept across the solves of the problem (Newton
+        # iterations, time increments) to reuse the analysis of the matrix
+        if solver_func is _solver_mumps:
+            self._kept_solver = _MumpsFactor(symmetric)
+        else:
+            self._kept_solver = None
         if rebuild_factor_context:
             self.set_reuse_factorization(True)
 
@@ -700,6 +709,10 @@ class ProblemBase:
                 self._factor_context.factor(A)
                 self._factor_valid = True
             return self._factor_context.solve(B)
+
+        if self._kept_solver is not None:
+            self._kept_solver.factor(A)
+            return self._kept_solver.solve(B)
 
         kargs = self.__solver[2]
         if self.__solver[3]:  # return_info = True
@@ -999,9 +1012,8 @@ def _mumps_context(symmetric):
 
 def _solver_mumps(A, B, symmetric=False, **kargs):
     # python-mumps exposes a Context-based API only; there is no
-    # top-level spsolve. For repeated solves on the same A, use
-    # `Problem.set_reuse_factorization(True)` to keep the Context alive
-    # across calls (see _MumpsFactor).
+    # top-level spsolve. Problem keeps a _MumpsFactor across its solves
+    # instead (see ProblemBase._solve), to reuse the analysis of the matrix.
     factor = _MumpsFactor(symmetric)
     factor.factor(A)
     return factor.solve(B)
@@ -1012,23 +1024,39 @@ def _solver_mumps(A, B, symmetric=False, **kargs):
 # All expose a uniform .factor(A) / .solve(B) interface.
 # =============================================================
 class _MumpsFactor:
+    """MUMPS factorization that keeps its analysis (ordering and symbolic
+    factorization) while the sparsity pattern of the matrix does not change:
+    only the numerical factorization is redone for a new matrix with the
+    same pattern, explicit zeros included."""
+
     def __init__(self, symmetric=False):
         self._symmetric = symmetric
         self._ctx, self._sym_with_matrix = _mumps_context(symmetric)
+        self._pattern = None
 
     def factor(self, A):
+        A = A.tocsr()
+        same = (
+            self._pattern is not None
+            and A.shape == self._pattern[0]
+            and np.array_equal(A.indptr, self._pattern[1])
+            and np.array_equal(A.indices, self._pattern[2])
+        )
+        if not same:
+            self._pattern = (A.shape, A.indptr.copy(), A.indices.copy())
         if self._sym_with_matrix:
             self._ctx.set_matrix(A, symmetric=True)
         else:
             A_given = sparse.tril(A, format="csr") if self._symmetric else A
             self._ctx.set_matrix(A_given)
-        # thread count before the analysis: MUMPS keeps it for the
-        # factorizations (its tree parallelism requires the same one)
-        n_threads = _mumps_threads()
-        instance = getattr(self._ctx, "mumps_instance", None)
-        if n_threads is not None and instance is not None:
-            instance.icntl[16] = n_threads
-        self._ctx.factor()
+        if not same:
+            # thread count before the analysis: MUMPS keeps it for the
+            # factorizations (its tree parallelism requires the same one)
+            n_threads = _mumps_threads()
+            instance = getattr(self._ctx, "mumps_instance", None)
+            if n_threads is not None and instance is not None:
+                instance.icntl[16] = n_threads
+        self._ctx.factor(reuse_analysis=same)
 
     def solve(self, B):
         return self._ctx.solve(B)
