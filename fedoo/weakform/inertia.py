@@ -1,13 +1,5 @@
 from fedoo.core.weakform import WeakFormBase
-from fedoo.lib_elements.element_list import MASS_N_ELM_GP
 from fedoo.weakform._axi_utils import axi_volume_weight
-
-
-def set_mass_quadrature(weakform):
-    """Set the mass quadrature on ``weakform`` unless already user defined."""
-    for elm_type, n_elm_gp in MASS_N_ELM_GP.items():
-        if weakform.assembly_options.get("n_elm_gp", elm_type) is None:
-            weakform.assembly_options["n_elm_gp", elm_type] = n_elm_gp
 
 
 class Inertia(WeakFormBase):
@@ -26,14 +18,6 @@ class Inertia(WeakFormBase):
         name of the WeakForm
     space : ModelingSpace, optional
         Modeling space used to build the weak form. Default to active one.
-
-    Notes
-    -----
-    The consistent mass needs a finer quadrature than the stiffness on
-    tetrahedra: the assembly uses 4 Gauss points on ``tet4`` and 15 on
-    ``tet10`` (both default to fewer points). Override with
-    ``wf.assembly_options["n_elm_gp", elm_type] = n`` or with the
-    ``n_elm_gp`` argument of the assembly.
     """
 
     def __init__(self, density, name="", space=None):
@@ -48,7 +32,6 @@ class Inertia(WeakFormBase):
             self.space.new_vector("Disp", ("DispX", "DispY"))
 
         self.density = density
-        set_mass_quadrature(self)
 
     def get_weak_equation(self, assembly, pb):
         op_dU = self.space.op_disp()  # displacement increment (incremental formulation)

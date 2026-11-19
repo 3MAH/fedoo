@@ -118,6 +118,7 @@ class Tri3r(Tri3):
     name = "tri3r"
     default_n_gp = 1
     n_nodes = 3
+    reduced_integration = True
 
     def shape_function(self, vec_xi):
         # return center value every where (as if n_pg = 1)

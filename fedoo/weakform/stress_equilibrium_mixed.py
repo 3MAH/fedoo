@@ -1,7 +1,6 @@
 """Mixed Stress Equilibrium weak form."""
 
 from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
-from fedoo.weakform.inertia import set_mass_quadrature
 from fedoo.weakform.stress_equilibrium import (
     StressEquilibrium,
     _check_F_validity,
@@ -68,10 +67,6 @@ class StressEquilibriumMixed(StressEquilibrium):
         self.space.new_variable("Pressure")
         self.bulk_modulus = bulk_modulus
         self.symmetrized_matrix = True
-        # The P_inc/K term is a mass-like N_i N_j block: with equal-order
-        # tetrahedra the default stiffness rule (1 point on tet4) would make it
-        # rank deficient, so keep the exact mass quadrature.
-        set_mass_quadrature(self)
 
     def get_weak_equation(self, assembly, pb):
         """Get the weak equation related to the current problem state."""

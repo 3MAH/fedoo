@@ -79,22 +79,33 @@ semantic versioning.
   `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
   to `None`: `1` (continuum) as before, or `2` with
   `integrator="closest_point"`, which only returns its algorithmic operator.
+- **`tet4r` element**: reduced linear tetrahedron (1 Gauss point), selected
+  with `elm_type="tet4r"` at the assembly level on a `tet4` mesh. Like
+  `tri3r`, `quad4r` and `hex8r`, its interpolation is evaluated at the
+  element centre whatever `n_elm_gp`. The defaults of `tet4` (4 points) and
+  `tet10` (15 points) are unchanged; `tet10r` keeps its 4-point rule.
+- **`fd.lib_elements.is_reduced_integration(elm_type, n_elm_gp)`** tells
+  whether an element is under-integrated (reduced variant, or fewer Gauss
+  points than the element default).
+- **Warning on a reduced consistent mass**: a reduced element or fewer Gauss
+  points than the default requested on the storage weak form itself
+  (`assembly_options` of the `Inertia` given to `set_inertia`) is kept and
+  warns (rank-deficient or inaccurate mass), except for a lumped explicit
+  mass. `ImplicitDynamic` keeps mass and stiffness in one assembly and warns
+  when that assembly is reduced.
 
 ### Changed
 
-- Default quadrature of the tetrahedra aligned on Abaqus and Ansys: ``tet4``
-  uses 1 Gauss point (was 4) and ``tet10`` 4 points (was 15). Both rules are
-  exact for the stiffness of a straight-sided element. ``tet4r`` (new) and
-  ``tet10r`` are now plain aliases of ``tet4`` and ``tet10``. The consistent
-  mass keeps an exact rule (4 points on ``tet4``, 15 on ``tet10``): the
-  ``Inertia`` weak form sets it through ``assembly_options``, and a time
-  integrator that adds the mass to a stiffness assembly left at its default
-  quadrature moves that assembly to the mass rule (``ImplicitDynamic``
-  does the same). ``StressEquilibriumMixed``, ``PoroMechanics`` and
-  ``PoroMechanicsSimple`` carry an ``N_i N_j`` pressure block (``P/K``,
-  non-lumped Biot storage) and keep the same mass rule on equal-order
-  tetrahedra (Taylor-Hood combined elements are exact with 4 points). Static results on ``tet10`` change slightly for nonlinear
-  laws or curved elements.
+- **The mass no longer follows a reduced stiffness.** With a reduced element
+  (`tet4r`, `tet10r`, `tri3r`, `quad4r`, `hex8r`, `hex20r`, hourglass
+  elements) the mass is assembled on the element of the mesh with its default
+  rule, and with fewer Gauss points than the element default it keeps the
+  default rule. This holds for the `fd.time` implicit integrators (the
+  assembly is then split into a storage and a stiffness assembly, the nodal
+  `Velocity`/`Acceleration` staying on the user's assembly) and for the
+  explicit, linear dynamic and modal problems. Dynamic results on `quad4r`,
+  `hex8r`, `hex20r` and `tet10r` change: their consistent mass was
+  under-integrated. Full elements are unaffected.
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
@@ -315,9 +326,6 @@ semantic versioning.
 
 ### Migration
 
-- To get the previous tetrahedron integration back, pass ``n_elm_gp=4``
-  (``tet4``) or ``n_elm_gp=15`` (``tet10``) to ``Assembly.create``, or set
-  ``wf.assembly_options["n_elm_gp", "tet10"] = 15``.
 - Remove `material.corate = ...` from scripts (it now warns and was never
   read). To choose
   the objective rate, set `wf.corate` on the `StressEquilibrium` weak form

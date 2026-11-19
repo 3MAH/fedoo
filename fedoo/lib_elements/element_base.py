@@ -94,6 +94,8 @@ def gausspoint_extrapolation_matrix(xi_gp, xi_nd, shape_function_gp, rtol=1e-10)
 class Element:
     # Evaluate the physical derivative transformation at the element center.
     use_center_jacobian = False
+    # True for the under-integrated variants ("quad4r", "tet10r", ...).
+    reduced_integration = False
 
     # Lines of xi should contains the coordinates of each point to consider
     def shape_function(self, xi):

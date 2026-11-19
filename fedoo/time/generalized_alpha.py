@@ -4,15 +4,22 @@ import numpy as np
 from scipy import sparse
 
 from fedoo.core._sparsematrix import scatter_dense_block
+from fedoo.core.assembly import Assembly
+from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
-from fedoo.time.base import TimeIntegratorBase, warn_if_conditionally_stable
+from fedoo.time.base import (
+    TimeIntegratorBase,
+    warn_if_conditionally_stable,
+    warn_if_reduced_mass,
+)
 from fedoo.time.common import (
     RayleighDamping,
     newmark_acceleration_velocity,
     resolve_dissipation,
     resolve_storage,
     increment_solved,
+    storage_integration,
 )
 
 
@@ -290,6 +297,32 @@ class GeneralizedAlpha(TimeIntegratorBase):
         assembly._fedoo_time_integrated = True
         return assembly
 
+    def _split_storage(self, leaf, compiled):
+        terms = list(compiled.iter_leaf())
+        storage_terms = [
+            term for term in terms if isinstance(term, GeneralizedAlphaStorageTerm)
+        ]
+        if len(storage_terms) != 1:
+            return None
+        inertia = storage_terms[0]
+        elm_type, n_elm_gp, explicit = storage_integration(leaf, inertia.mass_wf)
+        if (elm_type, n_elm_gp) == (leaf.elm_type, leaf.n_elm_gp):
+            return None
+
+        # The nodal Newmark state stays on the stiffness assembly (the one
+        # the user holds); the storage assembly comes first so that this state
+        # is updated before the stiffness is assembled.
+        inertia._state_assembly = leaf
+        storage_assembly = Assembly(inertia, leaf.mesh, elm_type, n_elm_gp=n_elm_gp)
+        if explicit:
+            warn_if_reduced_mass(storage_assembly, stacklevel=5)
+        static_terms = [term for term in terms if term is not inertia]
+        if len(static_terms) == 1:
+            leaf.weakform = static_terms[0]
+        else:
+            leaf.weakform = GeneralizedAlphaWeakFormSum(static_terms)
+        return AssemblySum([storage_assembly, leaf])
+
     def _integrate_leaf(self, weakform):
         storage = resolve_storage(weakform)
         if storage is None:
@@ -385,8 +418,16 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
             wf = Inertia(wf)
         self.mass_wf = wf
         self.damping_coef = None
+        # assembly holding the nodal state, when not the one of this term
+        self._state_assembly = None
+
+    def _state(self, assembly):
+        if self._state_assembly is None:
+            return assembly
+        return self._state_assembly
 
     def initialize(self, assembly, pb):
+        assembly = self._state(assembly)
         assembly.sv_type["Velocity"] = "Node"
         assembly.sv_type["Acceleration"] = "Node"
         assembly.sv_type["_DeltaDisp"] = "Node"
@@ -396,6 +437,7 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         assembly.sv["_DeltaDisp"] = np.zeros(shape)
 
     def update(self, assembly, pb):
+        assembly = self._state(assembly)
         n_node_dof = assembly.space.nvar * assembly.mesh.n_nodes
         if np.isscalar(pb._dU) and pb._dU == 0:
             assembly.sv["_DeltaDisp"] = np.zeros_like(assembly.sv["_DeltaDisp"])
@@ -404,7 +446,16 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
                 assembly.space.nvar, assembly.mesh.n_nodes
             )
 
+    def to_start(self, assembly, pb):
+        # roll the shared state back before this assembly is re-assembled
+        state = self._state(assembly)
+        if state is not assembly:
+            for key in ("Velocity", "Acceleration", "_DeltaDisp"):
+                if key in state.sv_start:
+                    state.sv[key] = state.sv_start[key]
+
     def set_start(self, assembly, pb):
+        assembly = self._state(assembly)
         if increment_solved(pb) and not (
             np.isscalar(pb.get_dof_solution()) and pb.get_dof_solution() == 0
         ):
@@ -424,11 +475,10 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         if dt == 0:
             return 0
 
-        a_np1, v_np1 = _newmark_state(self, assembly, dt)
-        a_alpha = (1.0 - self.alpha_m) * a_np1 + self.alpha_m * assembly.sv[
-            "Acceleration"
-        ]
-        v_alpha = (1.0 - self.alpha_f) * v_np1 + self.alpha_f * assembly.sv["Velocity"]
+        state = self._state(assembly)
+        a_np1, v_np1 = _newmark_state(self, state, dt)
+        a_alpha = (1.0 - self.alpha_m) * a_np1 + self.alpha_m * state.sv["Acceleration"]
+        v_alpha = (1.0 - self.alpha_f) * v_np1 + self.alpha_f * state.sv["Velocity"]
 
         a0 = 1.0 / (self.beta * dt**2)
         c0 = self.gamma / (self.beta * dt)

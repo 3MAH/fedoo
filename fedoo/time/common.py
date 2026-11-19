@@ -9,6 +9,12 @@ from fedoo.core.base import AssemblyBase
 from fedoo.core.matrix import as_global_csr
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.lib_elements.element_list import (
+    get_default_n_gp,
+    get_element,
+    is_reduced_integration,
+)
+from fedoo.time.base import warn_if_reduced_mass
 from fedoo.weakform.inertia import Inertia
 
 
@@ -53,7 +59,45 @@ def resolve_dissipation(weakform):
     return weakform.get_dissipation()
 
 
-def build_storage_assembly(assembly, evolution):
+def storage_integration(source, storage):
+    """Return ``(elm_type, n_elm_gp, explicit)`` used to assemble a storage.
+
+    A storage (mass) term does not follow a reduced stiffness: when the
+    assembly ``source`` uses a reduced element (``"tet4r"``, ``"hex8r"``,
+    ...) the storage is assembled on the element of the mesh, and when it
+    uses fewer Gauss points than the element default the storage keeps the
+    default rule. ``elm_type`` or ``n_elm_gp`` set in the ``assembly_options``
+    of the storage weak form are used as given (``explicit`` is then True).
+    """
+    mesh = source.mesh
+    options = getattr(storage, "assembly_options", None)
+    elm_type = n_elm_gp = None
+    if options is not None:
+        elm_type = options.get("elm_type", mesh.elm_type)
+        n_elm_gp = options.get("n_elm_gp", elm_type or source.elm_type)
+    if elm_type is not None or n_elm_gp is not None:
+        elm_type = elm_type or source.elm_type
+        if n_elm_gp is None:
+            n_elm_gp = get_default_n_gp(elm_type, mesh)
+        return elm_type, n_elm_gp, True
+
+    elm_type, n_elm_gp = source.elm_type, source.n_elm_gp
+    if not is_reduced_integration(elm_type, n_elm_gp, mesh):
+        return elm_type, n_elm_gp, False
+    # a density given at the gauss points of source cannot be moved
+    density = np.asarray(getattr(storage, "density", 0.0))
+    if density.ndim and density.shape[-1] == source.n_gauss_points != mesh.n_elements:
+        return elm_type, n_elm_gp, False
+    try:
+        reduced_variant = get_element(elm_type).reduced_integration
+    except (KeyError, AttributeError):
+        reduced_variant = False
+    if reduced_variant:
+        elm_type = mesh.elm_type
+    return elm_type, get_default_n_gp(elm_type, mesh), False
+
+
+def build_storage_assembly(assembly, evolution, warn_reduced=True):
     """Build storage assemblies while retaining per-part damping metadata.
 
     Different Rayleigh coefficients are supported across leaf assemblies. A
@@ -103,7 +147,13 @@ def build_storage_assembly(assembly, evolution):
             )
 
         storage = storages[0] if len(storages) == 1 else WeakFormSum(storages)
-        storage_assembly = Assembly.create(storage, source.mesh, source.elm_type)
+        elm_type, n_elm_gp, _ = storage_integration(source, storage)
+        storage_assembly = Assembly.create(
+            storage, source.mesh, elm_type, n_elm_gp=n_elm_gp
+        )
+        if warn_reduced:
+            for leaf in storage_assembly.iter_leaf():
+                warn_if_reduced_mass(leaf, stacklevel=4)
         groups.append(
             StorageAssemblyGroup(
                 source_assembly=source,

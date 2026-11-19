@@ -65,9 +65,9 @@ _dict_default_n_gp = {
     "quad4hourglass": 1,
     "quad8": 9,
     "quad9": 9,
-    "tet4": 1,
+    "tet4": 4,
     "tet4r": 1,
-    "tet10": 4,
+    "tet10": 15,
     "tet10r": 4,
     "hex8": 8,
     "hex8r": 1,
@@ -87,13 +87,6 @@ _dict_default_n_gp = {
     "ptri6": 7,
     "pquad9": 9,
 }
-
-# Quadrature of the consistent mass (N_i N_j) for the elements whose default
-# rule is too coarse for it: 1 point is exact for the tet4 stiffness but gives
-# a rank-deficient mass, 4 points are exact for the straight-sided tet10
-# stiffness but not for its (degree 4) mass. Used by the Inertia weak form and
-# by the time integrators.
-MASS_N_ELM_GP = {"tet4": 4, "tet4r": 4, "tet10": 15, "tet10r": 15}
 
 
 def add_elements(*args):
@@ -331,6 +324,21 @@ def get_default_n_gp(element, mesh=None, raise_error=True):
             raise NameError("Element unknown: no default number of integration points")
 
     return n_elm_gp
+
+
+def is_reduced_integration(elm_type, n_elm_gp, mesh=None):
+    """Return True if ``elm_type`` with ``n_elm_gp`` points is under-integrated.
+
+    This is the case of the reduced element variants (``"tri3r"``,
+    ``"quad4r"``, ``"hex8r"``, ``"hex20r"``, ``"tet4r"``, ``"tet10r"``,
+    hourglass elements) and of any element used with fewer Gauss points than
+    its default rule. ``mesh`` gives the fallback default for a combined
+    element.
+    """
+    if getattr(_dict_elements.get(elm_type), "reduced_integration", False):
+        return True
+    n_full = get_default_n_gp(elm_type, mesh, raise_error=False)
+    return n_full is not None and 0 < n_elm_gp < n_full
 
 
 def get_element(element_str):

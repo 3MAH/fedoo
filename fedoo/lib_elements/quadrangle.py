@@ -171,6 +171,7 @@ class Quad4r(Quad4):
     name = "quad4r"
     default_n_gp = 1
     n_nodes = 4
+    reduced_integration = True
     use_center_jacobian = True
 
     def shape_function(self, vec_xi):
@@ -318,6 +319,7 @@ class Quad4Hourglass(Quad4):
     name = "quad4hourglass"
     default_n_gp = 1
     n_nodes = 4
+    reduced_integration = True
 
     def __init__(self, n_elm_gp=1, **kargs):
         assembly = kargs.get("assembly", None)

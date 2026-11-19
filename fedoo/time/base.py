@@ -2,29 +2,54 @@
 
 import warnings
 
+import numpy as np
+
 from fedoo.core.assembly import Assembly
 from fedoo.core.base import AssemblyBase
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormSum
-from fedoo.lib_elements.element_list import MASS_N_ELM_GP, get_default_n_gp
+from fedoo.lib_elements.element_list import is_reduced_integration
 
 _STAB_TOL = 1e-12
 
 
-def _use_storage_quadrature(assembly):
-    """Raise the quadrature of a leaf that now carries a storage (mass) term.
+def warn_if_reduced_mass(assembly, stacklevel=3):
+    """Warn when a consistent mass is assembled with a reduced integration.
 
-    The storage term is assembled in the same leaf as the stiffness. On
-    tetrahedra the default rule (1 point on tet4, 4 on tet10) is exact for
-    the stiffness but not for the N_i N_j storage, so a leaf left at its
-    default quadrature is moved to the storage one. A user-chosen quadrature
-    (different from the default) is kept.
+    Reduced elements (``"tet4r"``, ``"tet10r"``, ``"hex8r"``, ...) or fewer
+    Gauss points than the element default under-integrate the
+    :math:`N_i N_j` mass term: the consistent mass is rank deficient
+    (1 point on a linear element) or inaccurate. Lumped masses are not
+    concerned.
+
+    By default the mass does not follow a reduced stiffness (see
+    :py:func:`fedoo.time.common.storage_integration`): this only fires for a
+    reduced integration requested on the storage weak form itself, or where
+    stiffness and storage share one assembly.
     """
-    n_storage = MASS_N_ELM_GP.get(assembly.elm_type)
-    if n_storage is None:
+    lumping = np.atleast_1d(assembly.mat_lumping)
+    if lumping.size and lumping.all():
         return
-    if assembly.n_elm_gp == get_default_n_gp(assembly.elm_type, assembly.mesh):
-        assembly.n_elm_gp = n_storage
+    if is_reduced_integration(assembly.elm_type, assembly.n_elm_gp, assembly.mesh):
+        warnings.warn(
+            f"Consistent mass assembled with a reduced integration "
+            f"(elm_type={assembly.elm_type!r}, n_elm_gp={assembly.n_elm_gp}): "
+            "the mass matrix is under-integrated and may be rank deficient. "
+            "Use the full element (e.g. 'tet4', 'tet10', 'hex8') with its "
+            "default number of Gauss points for the mass.",
+            stacklevel=stacklevel,
+        )
+
+
+def _replace_leaf(root, old, new):
+    """Return ``root`` with the leaf ``old`` replaced by ``new``."""
+    if root is old:
+        return new
+    children = getattr(root, "_list_assembly", None)
+    if children is not None:
+        for i, child in enumerate(children):
+            children[i] = _replace_leaf(child, old, new)
+    return root
 
 
 def warn_if_conditionally_stable(beta, gamma, alpha_m=0.0, alpha_f=0.0, context=""):
@@ -84,15 +109,28 @@ class TimeIntegratorBase:
     def compile_assembly(self, assembly, evolution=None):
         """Compile compatible weakforms in an assembly tree in place."""
         evolution = normalize_time_evolution(evolution or self.evolution)
-        for leaf in assembly.iter_leaf():
+        for leaf in list(assembly.iter_leaf()):
             if isinstance(leaf, Assembly) and leaf.weakform is not None:
                 compiled = self.compile_weakform(leaf.weakform, evolution)
                 if compiled is not leaf.weakform:
+                    split = self._split_storage(leaf, compiled)
+                    if split is not None:
+                        assembly = _replace_leaf(assembly, leaf, split)
+                        continue
                     leaf.weakform = compiled
-                    _use_storage_quadrature(leaf)
+                    if not self.is_explicit:
+                        warn_if_reduced_mass(leaf)
             elif isinstance(leaf, AssemblyBase):
                 self._compile_assembly_level_provider(leaf)
         return assembly
+
+    def _split_storage(self, leaf, compiled):
+        """Return an assembly replacing ``leaf`` with a separate storage part.
+
+        Called when the storage needs another element or quadrature than the
+        stiffness. Return None to keep both in ``leaf`` (default).
+        """
+        return None
 
     def compile_weakform(self, weakform, evolution=None):
         """Return a time-integrated version of ``weakform`` when applicable."""

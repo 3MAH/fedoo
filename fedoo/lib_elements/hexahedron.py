@@ -282,6 +282,7 @@ class Hex8r(Hex8):
     name = "hex8r"
     default_n_gp = 1
     n_nodes = 8
+    reduced_integration = True
     use_center_jacobian = True
 
     # In the functions ShapeFunction and ShapeFunctionDerivative xi contains a list of point using reference element coordinates (xi, eta, zeta)
@@ -523,6 +524,7 @@ class Hex20r(Hex20):
     name = "hex20r"
     default_n_gp = 14
     n_nodes = 20
+    reduced_integration = True
 
     # Same 20-node quadratic interpolation as Hex20, but integrated with the
     # 14-point reduced rule (Ansys SOLID186 uniform reduced integration).
@@ -537,6 +539,7 @@ class Hex8Hourglass(Hex8):
     name = "hex8hourglass"
     default_n_gp = 1
     n_nodes = 8
+    reduced_integration = True
 
     def __init__(self, n_elm_gp=1, **kargs):
         assembly = kargs.get("assembly", None)

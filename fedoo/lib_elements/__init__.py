@@ -10,6 +10,21 @@ is built or an assembly is created (``"hex8"``, ``"hex20"``, ``"tet4"``,
 ...). The names known to fedoo are the keys of
 :py:func:`~fedoo.lib_elements.get_all`.
 
+Each element has a default number of Gauss points, which the ``n_elm_gp``
+argument of :py:meth:`fedoo.Assembly.create` overrides: 4 for ``"tet4"``,
+15 for ``"tet10"``, 8 for ``"hex8"``, 27 for ``"hex20"``. The reduced
+variants are selected with ``elm_type`` at the assembly level, the mesh
+keeping its base element: ``"tri3r"``, ``"quad4r"``, ``"hex8r"`` and
+``"tet4r"`` use 1 point and evaluate the interpolation at the element
+centre whatever ``n_elm_gp`` (which allows selective integration),
+``"hex20r"`` (14 points) and ``"tet10r"`` (4 points) only change the default
+rule. In dynamics the mass does not follow a reduced stiffness: it is
+assembled on the element of the mesh with its default rule (4 points on a
+``"tet4"`` mesh even with ``elm_type="tet4r"``). A reduced mass must be
+requested on the storage weak form (``assembly_options`` of the
+:py:class:`~fedoo.weakform.Inertia` given to ``set_inertia``) and raises a
+warning.
+
 By default every variable of the modeling space is interpolated with the
 element of the mesh. A :py:class:`~fedoo.lib_elements.CombinedElement`
 defines a new element type in which some variables use another
@@ -33,6 +48,7 @@ interpolation, for instance quadratic displacement and linear pressure
 
    get_all
    get_element
+   is_reduced_integration
 """
 
 from .beam import (
@@ -67,6 +83,7 @@ from .element_list import (
     get_default_n_gp,
     get_element,
     get_node_elm_coordinates,
+    is_reduced_integration,
 )
 from .finite_difference_1d import (
     BackwardFiniteDifference,
