@@ -130,6 +130,26 @@ class Tet4(ElementTetrahedron):
         ]
 
 
+class Tet4r(Tet4):
+    """Reduced ``tet4``: 1 Gauss point, interpolation taken at the centroid.
+
+    Same convention as ``tri3r``, ``quad4r`` and ``hex8r``: the shape
+    functions return their centroid value at every integration point.
+    """
+
+    name = "tet4r"
+    default_n_gp = 1
+    n_nodes = 4
+    reduced_integration = True
+
+    def __init__(self, n_elm_gp=1, **kargs):
+        Tet4.__init__(self, n_elm_gp, **kargs)
+
+    def shape_function(self, vec_xi):
+        # return center value every where (as if n_pg = 1)
+        return np.full((len(vec_xi), 4), 0.25)
+
+
 class Tet10(ElementTetrahedron):
     name = "tet10"
     default_n_gp = 15
@@ -212,6 +232,7 @@ class Tet10r(Tet10):
     name = "tet10r"
     default_n_gp = 4
     n_nodes = 10
+    full_n_gp = Tet10.default_n_gp
 
     # Same 10-node quadratic interpolation as Tet10, but integrated with the
     # 4-point rule instead of the default accurate 15-point rule. This matches

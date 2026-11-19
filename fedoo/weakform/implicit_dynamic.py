@@ -1,5 +1,5 @@
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
-from fedoo.time.base import warn_if_conditionally_stable
+from fedoo.time.base import warn_if_conditionally_stable, warn_if_reduced_mass
 from fedoo.weakform.inertia import Inertia
 from fedoo.weakform.stress_equilibrium import StressEquilibrium
 
@@ -22,6 +22,7 @@ class _NewmarkInertia(WeakFormBase):
         self.damping_coef = None  # for Rayleigh damping
 
     def initialize(self, assembly, pb):
+        warn_if_reduced_mass(assembly)
         assembly.sv_type["Velocity"] = "Node"
         assembly.sv_type["Acceleration"] = "Node"
         assembly.sv_type["_DeltaDisp"] = "Node"

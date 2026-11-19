@@ -79,9 +79,57 @@ semantic versioning.
   `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
   to `None`: `1` (continuum) as before, or `2` with
   `integrator="closest_point"`, which only returns its algorithmic operator.
+- **`tet4r` element**: reduced linear tetrahedron (1 Gauss point), selected
+  with `elm_type="tet4r"` at the assembly level on a `tet4` mesh. Like
+  `tri3r`, `quad4r` and `hex8r`, its interpolation is evaluated at the
+  element centre whatever `n_elm_gp`. The defaults of `tet4` (4 points) and
+  `tet10` (15 points) are unchanged; `tet10r` keeps its 4-point rule.
+- **`fd.lib_elements.is_reduced_integration(elm_type, n_elm_gp)`** tells
+  whether the consistent mass of an element is under-integrated (variant with
+  centroid interpolation, or fewer Gauss points than the full rule), and
+  **`fd.lib_elements.get_full_integration(elm_type, mesh)`** returns the
+  element and number of Gauss points of the full integration. `tet4` with 1
+  point and straight-sided `tet10` with 4 are reduced in this sense although
+  their stiffness is exact.
+- **Warning on a reduced consistent mass**: a reduced element or fewer Gauss
+  points than the full rule requested on the storage weak form itself
+  (`assembly_options` of the `Inertia` given to `set_inertia`) is kept and
+  warns: the element mass is rank deficient. The same warning is raised
+  where mass and stiffness have to share a reduced assembly: `ImplicitDynamic`,
+  several dynamic weak forms in one assembly, or a density given at the Gauss
+  points of the stiffness. A lumped mass does not warn.
+- **Warning when the rule of a reduced element is changed**: an assembly
+  created on `tri3r`, `quad4r`, `hex8r`, `tet4r`, `tet10r`, `hex20r` or an
+  hourglass element with an `n_elm_gp` other than its default warns. The
+  centroid variants keep their interpolation at the element centre, and
+  `tet10r`/`hex20r` are then `tet10`/`hex20` with that rule. Combined
+  elements (`quad4sri`, `hex8sri`, plates) are not concerned.
 
 ### Changed
 
+- **`quad4r` and `tri3r` default to 1 Gauss point** when used as `elm_type`
+  of an assembly, as their class already declared and like `hex8r`. They
+  were missing from the registry and silently took the rule of the mesh
+  element (4 and 3 points). Without hourglass control `quad4r` at 1 point
+  has zero-energy modes: use `StressEquilibriumRI` or `quad4sri`.
+- **The mass no longer follows a reduced stiffness.** With a variant using
+  centroid interpolation (`tet4r`, `tri3r`, `quad4r`, `hex8r`, hourglass
+  elements) the mass is assembled on the element of the mesh with its default
+  rule; with fewer Gauss points than the full rule (`tet10r`, `hex20r`, or a
+  lowered `n_elm_gp`, as `StressEquilibriumRI` does) it uses the full rule.
+  This holds for the second-order `fd.time` implicit integrators (a storage
+  assembly is inserted before the stiffness one in the assembly sum, the
+  nodal `Velocity`/`Acceleration` staying on the user's assembly; a problem
+  built on a single assembly then has an `AssemblySum` as `pb.assembly`) and
+  for the explicit, linear dynamic and modal problems. Dynamic results on
+  these elements change: their consistent mass was rank deficient, and the
+  row-sum lumped mass of `quad4r`/`hex8r` differed from the full one on
+  distorted or axisymmetric meshes. Full elements with their default rule
+  are unaffected. First-order integrators are unchanged.
+- With `nlgeom="UL"`, a mass assembled in its own storage assembly is
+  integrated on the reference configuration (constant mass, `density` is the
+  reference density), whereas a full element with an implicit `fd.time`
+  integrator still integrates it on the current configuration.
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to

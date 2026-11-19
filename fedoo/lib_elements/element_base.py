@@ -94,6 +94,10 @@ def gausspoint_extrapolation_matrix(xi_gp, xi_nd, shape_function_gp, rtol=1e-10)
 class Element:
     # Evaluate the physical derivative transformation at the element center.
     use_center_jacobian = False
+    # True for the variants with centroid interpolation ("quad4r", "tet4r").
+    reduced_integration = False
+    # Gauss points of the full rule when the default one is reduced ("tet10r").
+    full_n_gp = None
 
     # Lines of xi should contains the coordinates of each point to consider
     def shape_function(self, xi):

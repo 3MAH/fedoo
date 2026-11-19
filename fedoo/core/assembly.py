@@ -1,3 +1,4 @@
+import warnings
 from copy import copy
 
 import numpy as np
@@ -10,6 +11,7 @@ from fedoo.core.base import AssemblyBase
 from fedoo.core.mesh import Mesh
 from fedoo.core.weakform import WeakFormBase, _AssemblyOptions, WeakFormSum
 from fedoo.lib_elements.element_list import (
+    _dict_elements,
     get_default_n_gp,
     get_element,
     get_node_elm_coordinates,
@@ -108,6 +110,22 @@ class Assembly(AssemblyBase):
             self.n_elm_gp = weakform.assembly_options.get(
                 "n_elm_gp", elm_type, get_default_n_gp(elm_type, mesh)
             )
+        # a reduced variant is defined by its default rule
+        element = _dict_elements.get(self.elm_type)
+        only_rule = getattr(element, "full_n_gp", None) is not None
+        if only_rule or getattr(element, "reduced_integration", False):
+            n_default = get_default_n_gp(self.elm_type, mesh)
+            if self.n_elm_gp != n_default:
+                if only_rule:
+                    detail = f'it is "{mesh.elm_type}" with that rule'
+                else:
+                    detail = "its interpolation is still taken at the element centre"
+                warnings.warn(
+                    f'"{self.elm_type}" is a reduced element with {n_default} '
+                    f"Gauss point(s): with n_elm_gp={self.n_elm_gp}, {detail}. "
+                    f'Use elm_type="{mesh.elm_type}" to change the rule.',
+                    stacklevel=2,
+                )
 
         # ``None`` means that the weak form has not resolved this option yet.
         # Formulation-dependent defaults are selected during initialization;

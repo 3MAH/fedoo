@@ -9,6 +9,12 @@ from fedoo.core.base import AssemblyBase
 from fedoo.core.matrix import as_global_csr
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
+from fedoo.lib_elements.element_list import (
+    get_default_n_gp,
+    get_full_integration,
+    is_reduced_integration,
+)
+from fedoo.time.base import warn_if_reduced_mass
 from fedoo.weakform.inertia import Inertia
 
 
@@ -53,7 +59,45 @@ def resolve_dissipation(weakform):
     return weakform.get_dissipation()
 
 
-def build_storage_assembly(assembly, evolution):
+def storage_integration(source, storage):
+    """Return the ``(elm_type, n_elm_gp)`` used to assemble a storage term.
+
+    A storage (mass) term does not follow a reduced stiffness: when the
+    assembly ``source`` is under-integrated (see
+    :py:func:`fedoo.lib_elements.is_reduced_integration`) the storage uses
+    the full integration given by
+    :py:func:`fedoo.lib_elements.get_full_integration`. ``elm_type`` and
+    ``n_elm_gp`` set in the ``assembly_options`` of a storage weak form are
+    used as given.
+
+    ``storage`` may be a sum: None is returned when its terms do not agree
+    on one integration.
+    """
+    choices = {_storage_integration(source, wf) for wf in storage.iter_leaf()}
+    return choices.pop() if len(choices) == 1 else None
+
+
+def _storage_integration(source, storage):
+    mesh = source.mesh
+    options = storage.assembly_options
+    full_type, n_full = get_full_integration(source.elm_type, mesh)
+    requested_type = options.get("elm_type", mesh.elm_type)
+    elm_type = requested_type or full_type
+    n_elm_gp = options.get("n_elm_gp", elm_type)
+    if requested_type is not None or n_elm_gp is not None:
+        if n_elm_gp is None:
+            n_elm_gp = get_default_n_gp(elm_type, mesh)
+        return elm_type, n_elm_gp
+    if not is_reduced_integration(source.elm_type, source.n_elm_gp, mesh):
+        return source.elm_type, source.n_elm_gp
+    # a density given at the gauss points of source cannot be moved
+    density = np.asarray(getattr(storage, "density", 0.0))
+    if density.ndim and density.shape[-1] == source.n_gauss_points != mesh.n_elements:
+        return source.elm_type, source.n_elm_gp
+    return full_type, n_full
+
+
+def build_storage_assembly(assembly, evolution, warn_reduced=True):
     """Build storage assemblies while retaining per-part damping metadata.
 
     Different Rayleigh coefficients are supported across leaf assemblies. A
@@ -103,7 +147,16 @@ def build_storage_assembly(assembly, evolution):
             )
 
         storage = storages[0] if len(storages) == 1 else WeakFormSum(storages)
-        storage_assembly = Assembly.create(storage, source.mesh, source.elm_type)
+        integration = storage_integration(source, storage)
+        if integration is None:  # per-term options: let Assembly.create group
+            storage_assembly = Assembly.create(storage, source.mesh, source.elm_type)
+        else:
+            storage_assembly = Assembly.create(
+                storage, source.mesh, integration[0], n_elm_gp=integration[1]
+            )
+        if warn_reduced:
+            for leaf in storage_assembly.iter_leaf():
+                warn_if_reduced_mass(leaf)
         groups.append(
             StorageAssemblyGroup(
                 source_assembly=source,

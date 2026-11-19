@@ -425,7 +425,9 @@ class ExplicitDynamic(Problem):
         self._assembled_force_displacement = self._state.displacement.copy()
         self._assembled_force_complete = True
 
-        self._storage_data = build_storage_assembly(self.__assembly, SECOND_ORDER)
+        self._storage_data = build_storage_assembly(
+            self.__assembly, SECOND_ORDER, warn_reduced=not self.mass_lumping
+        )
         self._mass_assembly = self._storage_data.assembly
         if self._mass_assembly is not None:
             self._mass_assembly.initialize(self)

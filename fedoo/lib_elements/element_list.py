@@ -14,7 +14,7 @@ from fedoo.lib_elements.quadrangle import (
 )
 
 # from fedoo.lib_elements.plate import *
-from fedoo.lib_elements.tetrahedron import Tet4, Tet10, Tet10r
+from fedoo.lib_elements.tetrahedron import Tet4, Tet4r, Tet10, Tet10r
 from fedoo.lib_elements.triangle import Tri3, Tri3r, Tri3Bubble, Tri6
 from fedoo.lib_elements.wedge import Wed6, Wed15, Wed18
 
@@ -34,6 +34,7 @@ _dict_elements = {
     "quad8": Quad8,
     "quad9": Quad9,
     "tet4": Tet4,
+    "tet4r": Tet4r,
     "tet10": Tet10,
     "tet10r": Tet10r,
     "hex8": Hex8,
@@ -58,17 +59,21 @@ _dict_default_n_gp = {
     "lin2interface": 2,
     "quad4interface": 4,
     "tri3": 3,
+    "tri3r": 1,
     "tri6": 7,
     "tri3bubble": 3,
     "quad4": 4,
+    "quad4r": 1,
     "quad4hourglass": 1,
     "quad8": 9,
     "quad9": 9,
     "tet4": 4,
+    "tet4r": 1,
     "tet10": 15,
     "tet10r": 4,
     "hex8": 8,
     "hex8r": 1,
+    "hex8hourglass": 1,
     "hex20": 27,
     "hex20r": 14,
     "wed6": 6,
@@ -131,7 +136,7 @@ def get_node_elm_coordinates(element, nNd_elm=None):
                 [-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0],
                 [-1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0],
             ]
-    elif element in ["tet4", "tet10", "tet10r"]:
+    elif element in ["tet4", "tet4r", "tet10", "tet10r"]:
         if nNd_elm == 4:
             return np.c_[
                 [0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]
@@ -322,6 +327,41 @@ def get_default_n_gp(element, mesh=None, raise_error=True):
             raise NameError("Element unknown: no default number of integration points")
 
     return n_elm_gp
+
+
+def get_full_integration(elm_type, mesh=None):
+    """Return ``(elm_type, n_elm_gp)`` of the full integration of ``elm_type``.
+
+    A variant with centroid interpolation (``"tri3r"``, ``"quad4r"``,
+    ``"hex8r"``, ``"tet4r"``, hourglass elements) maps to the element of
+    ``mesh`` with its default rule, as do ``"tet10r"`` and ``"hex20r"``
+    (without ``mesh``, their name is kept with the rule of ``"tet10"`` and
+    ``"hex20"``). Any other element maps to itself with its default rule.
+    """
+    element = _dict_elements.get(elm_type)
+    n_elm_gp = getattr(element, "full_n_gp", None)
+    variant = n_elm_gp is not None or getattr(element, "reduced_integration", False)
+    if variant and mesh is not None:
+        elm_type = mesh.elm_type
+        n_elm_gp = getattr(_dict_elements.get(elm_type), "full_n_gp", None)
+    if n_elm_gp is None:
+        n_elm_gp = get_default_n_gp(elm_type, mesh, raise_error=False)
+    return elm_type, n_elm_gp
+
+
+def is_reduced_integration(elm_type, n_elm_gp, mesh=None):
+    """Return True if the consistent mass of ``elm_type`` is under-integrated.
+
+    This is the case of the variants with centroid interpolation whatever
+    ``n_elm_gp``, and of any element used with fewer Gauss points than its
+    full rule (see :py:func:`get_full_integration`): the element mass matrix
+    is then rank deficient. The stiffness may still be exact (``"tet4"``
+    with 1 point, straight-sided ``"tet10"`` with 4).
+    """
+    if getattr(_dict_elements.get(elm_type), "reduced_integration", False):
+        return True
+    n_full = get_full_integration(elm_type, mesh)[1]
+    return n_full is not None and 0 < n_elm_gp < n_full
 
 
 def get_element(element_str):
