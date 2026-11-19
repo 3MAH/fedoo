@@ -5,7 +5,6 @@ from scipy import sparse
 
 from fedoo.core._sparsematrix import scatter_dense_block
 from fedoo.core.assembly import Assembly
-from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.time.base import (
@@ -21,6 +20,10 @@ from fedoo.time.common import (
     increment_solved,
     storage_integration,
 )
+
+
+# nodal state of the second-order integrators, held in ``assembly.sv``
+_STATE_KEYS = ("Velocity", "Acceleration", "_DeltaDisp")
 
 
 def _newmark_state(term, assembly, dt):
@@ -302,26 +305,28 @@ class GeneralizedAlpha(TimeIntegratorBase):
         storage_terms = [
             term for term in terms if isinstance(term, GeneralizedAlphaStorageTerm)
         ]
-        if len(storage_terms) != 1:
-            return None
-        inertia = storage_terms[0]
-        elm_type, n_elm_gp, explicit = storage_integration(leaf, inertia.mass_wf)
-        if (elm_type, n_elm_gp) == (leaf.elm_type, leaf.n_elm_gp):
+        integration = None
+        if len(storage_terms) == 1:
+            inertia = storage_terms[0]
+            integration = storage_integration(leaf, inertia.mass_wf)
+        if integration in (None, (leaf.elm_type, leaf.n_elm_gp)):
+            warn_if_reduced_mass(leaf)  # the mass stays with the stiffness
             return None
 
-        # The nodal Newmark state stays on the stiffness assembly (the one
-        # the user holds); the storage assembly comes first so that this state
-        # is updated before the stiffness is assembled.
+        # Newmark state stays on the user's stiffness assembly; the storage
+        # assembly comes first so the state is updated before the stiffness.
         inertia._state_assembly = leaf
-        storage_assembly = Assembly(inertia, leaf.mesh, elm_type, n_elm_gp=n_elm_gp)
-        if explicit:
-            warn_if_reduced_mass(storage_assembly, stacklevel=5)
+        storage_assembly = Assembly(
+            inertia, leaf.mesh, integration[0], n_elm_gp=integration[1]
+        )
+        warn_if_reduced_mass(storage_assembly)
         static_terms = [term for term in terms if term is not inertia]
-        if len(static_terms) == 1:
-            leaf.weakform = static_terms[0]
-        else:
+        if isinstance(compiled, GeneralizedAlphaWeakFormSum):
             leaf.weakform = GeneralizedAlphaWeakFormSum(static_terms)
-        return AssemblySum([storage_assembly, leaf])
+            leaf.weakform._split_inertia = inertia
+        else:
+            leaf.weakform = WeakFormSum(static_terms)
+        return storage_assembly
 
     def _integrate_leaf(self, weakform):
         storage = resolve_storage(weakform)
@@ -422,19 +427,14 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
         self._state_assembly = None
 
     def _state(self, assembly):
-        if self._state_assembly is None:
-            return assembly
-        return self._state_assembly
+        return assembly if self._state_assembly is None else self._state_assembly
 
     def initialize(self, assembly, pb):
         assembly = self._state(assembly)
-        assembly.sv_type["Velocity"] = "Node"
-        assembly.sv_type["Acceleration"] = "Node"
-        assembly.sv_type["_DeltaDisp"] = "Node"
         shape = (assembly.space.nvar, assembly.mesh.n_nodes)
-        assembly.sv["Velocity"] = np.zeros(shape)
-        assembly.sv["Acceleration"] = np.zeros(shape)
-        assembly.sv["_DeltaDisp"] = np.zeros(shape)
+        for key in _STATE_KEYS:
+            assembly.sv_type[key] = "Node"
+            assembly.sv[key] = np.zeros(shape)
 
     def update(self, assembly, pb):
         assembly = self._state(assembly)
@@ -448,9 +448,9 @@ class GeneralizedAlphaStorageTerm(WeakFormBase):
 
     def to_start(self, assembly, pb):
         # roll the shared state back before this assembly is re-assembled
-        state = self._state(assembly)
-        if state is not assembly:
-            for key in ("Velocity", "Acceleration", "_DeltaDisp"):
+        state = self._state_assembly
+        if state is not None:
+            for key in _STATE_KEYS:
                 if key in state.sv_start:
                     state.sv[key] = state.sv_start[key]
 
@@ -548,6 +548,9 @@ class GeneralizedAlphaStiffnessTerm(WeakFormBase):
 class GeneralizedAlphaWeakFormSum(WeakFormSum):
     """WeakFormSum with Rayleigh damping accessors for second-order terms."""
 
+    # inertia term, when it is assembled in a separate storage assembly
+    _split_inertia = None
+
     def __getattr__(self, name):
         if name.startswith("__"):
             raise AttributeError(name)
@@ -567,6 +570,8 @@ class GeneralizedAlphaWeakFormSum(WeakFormSum):
         terms = self.list_weakform
         if any(isinstance(t, GeneralizedAlphaDissipationTerm) for t in terms):
             return None
+        if self._split_inertia is not None:
+            terms = [terms[0], self._split_inertia]
         if len(terms) >= 2 and all(hasattr(t, "damping_coef") for t in terms[:2]):
             return terms
         return None

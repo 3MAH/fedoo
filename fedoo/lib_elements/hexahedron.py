@@ -524,7 +524,7 @@ class Hex20r(Hex20):
     name = "hex20r"
     default_n_gp = 14
     n_nodes = 20
-    reduced_integration = True
+    full_n_gp = Hex20.default_n_gp
 
     # Same 20-node quadratic interpolation as Hex20, but integrated with the
     # 14-point reduced rule (Ansys SOLID186 uniform reduced integration).

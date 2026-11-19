@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 
 from fedoo.core.assembly import Assembly
+from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
 from fedoo.core.time_evolution import normalize_time_evolution
 from fedoo.core.weakform import WeakFormSum
@@ -13,42 +14,53 @@ from fedoo.lib_elements.element_list import is_reduced_integration
 _STAB_TOL = 1e-12
 
 
-def warn_if_reduced_mass(assembly, stacklevel=3):
+def warn_if_reduced_mass(assembly):
     """Warn when a consistent mass is assembled with a reduced integration.
 
-    Reduced elements (``"tet4r"``, ``"tet10r"``, ``"hex8r"``, ...) or fewer
-    Gauss points than the element default under-integrate the
-    :math:`N_i N_j` mass term: the consistent mass is rank deficient
-    (1 point on a linear element) or inaccurate. Lumped masses are not
-    concerned.
+    With a variant using centroid interpolation (``"tet4r"``, ``"hex8r"``,
+    ...) or fewer Gauss points than the full rule of the element, the
+    :math:`N_i N_j` element mass is rank deficient. Nothing is reported when
+    a term of the assembly is lumped.
 
     By default the mass does not follow a reduced stiffness (see
     :py:func:`fedoo.time.common.storage_integration`): this only fires for a
     reduced integration requested on the storage weak form itself, or where
-    stiffness and storage share one assembly.
+    stiffness and storage have to share one assembly.
     """
-    lumping = np.atleast_1d(assembly.mat_lumping)
-    if lumping.size and lumping.all():
+    if np.any(assembly.mat_lumping):
         return
     if is_reduced_integration(assembly.elm_type, assembly.n_elm_gp, assembly.mesh):
         warnings.warn(
             f"Consistent mass assembled with a reduced integration "
             f"(elm_type={assembly.elm_type!r}, n_elm_gp={assembly.n_elm_gp}): "
-            "the mass matrix is under-integrated and may be rank deficient. "
-            "Use the full element (e.g. 'tet4', 'tet10', 'hex8') with its "
-            "default number of Gauss points for the mass.",
-            stacklevel=stacklevel,
+            "the element mass matrix is rank deficient. Use the full element "
+            "(e.g. 'tet4', 'tet10', 'hex8') with its default number of Gauss "
+            "points for the mass.",
+            stacklevel=3,
         )
 
 
-def _replace_leaf(root, old, new):
-    """Return ``root`` with the leaf ``old`` replaced by ``new``."""
-    if root is old:
-        return new
-    children = getattr(root, "_list_assembly", None)
-    if children is not None:
+def _insert_before(root, leaf, new):
+    """Insert ``new`` just before ``leaf`` in the sum holding it.
+
+    Return the root of the tree: a new sum when ``root`` is ``leaf``.
+    """
+    if root is leaf:
+        return AssemblySum([new, leaf])
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, AssemblySum):
+            continue
+        children = node.list_assembly
         for i, child in enumerate(children):
-            children[i] = _replace_leaf(child, old, new)
+            if child is leaf:
+                children.insert(i, new)
+                new.associated_assembly_sum = node
+                if node._reload != "all":
+                    node._reload = [j + (j >= i) for j in node._reload] + [i]
+                return root
+        stack.extend(children)
     return root
 
 
@@ -107,28 +119,39 @@ class TimeIntegratorBase:
     is_explicit = False
 
     def compile_assembly(self, assembly, evolution=None):
-        """Compile compatible weakforms in an assembly tree in place."""
+        """Compile compatible weakforms in an assembly tree.
+
+        The leaves are compiled in place. The returned root is a new
+        ``AssemblySum`` when ``assembly`` is a leaf that needs a separate
+        storage assembly (see :meth:`_split_storage`).
+        """
         evolution = normalize_time_evolution(evolution or self.evolution)
-        for leaf in list(assembly.iter_leaf()):
-            if isinstance(leaf, Assembly) and leaf.weakform is not None:
-                compiled = self.compile_weakform(leaf.weakform, evolution)
-                if compiled is not leaf.weakform:
-                    split = self._split_storage(leaf, compiled)
-                    if split is not None:
-                        assembly = _replace_leaf(assembly, leaf, split)
-                        continue
+        leaves = list(assembly.iter_leaf())
+        for leaf in leaves:
+            if not isinstance(leaf, Assembly) or leaf.weakform is None:
+                if isinstance(leaf, AssemblyBase):
+                    self._compile_assembly_level_provider(leaf)
+                continue
+            compiled = self.compile_weakform(leaf.weakform, evolution)
+            if compiled is not leaf.weakform:
+                storage = self._split_storage(leaf, compiled)
+                if storage is None:
                     leaf.weakform = compiled
-                    if not self.is_explicit:
-                        warn_if_reduced_mass(leaf)
-            elif isinstance(leaf, AssemblyBase):
-                self._compile_assembly_level_provider(leaf)
+                else:
+                    leaf._storage_assembly = storage
+            # also re-attach the storage of a leaf compiled in another tree
+            storage = getattr(leaf, "_storage_assembly", None)
+            if storage is not None and all(storage is not a for a in leaves):
+                assembly = _insert_before(assembly, leaf, storage)
         return assembly
 
     def _split_storage(self, leaf, compiled):
-        """Return an assembly replacing ``leaf`` with a separate storage part.
+        """Return a separate storage assembly for ``leaf``, or None.
 
-        Called when the storage needs another element or quadrature than the
-        stiffness. Return None to keep both in ``leaf`` (default).
+        Called when a leaf is compiled. An integrator whose storage needs
+        another element or quadrature than ``leaf`` sets the remaining terms
+        as ``leaf.weakform`` and returns the storage assembly, which is
+        placed just before ``leaf``. None keeps ``compiled`` in ``leaf``.
         """
         return None
 

@@ -14,14 +14,21 @@ Each element has a default number of Gauss points, which the ``n_elm_gp``
 argument of :py:meth:`fedoo.Assembly.create` overrides: 4 for ``"tet4"``,
 15 for ``"tet10"``, 8 for ``"hex8"``, 27 for ``"hex20"``. The reduced
 variants are selected with ``elm_type`` at the assembly level, the mesh
-keeping its base element: ``"tri3r"``, ``"quad4r"``, ``"hex8r"`` and
-``"tet4r"`` use 1 point and evaluate the interpolation at the element
-centre whatever ``n_elm_gp`` (which allows selective integration),
-``"hex20r"`` (14 points) and ``"tet10r"`` (4 points) only change the default
-rule. In dynamics the mass does not follow a reduced stiffness: it is
-assembled on the element of the mesh with its default rule (4 points on a
-``"tet4"`` mesh even with ``elm_type="tet4r"``). A reduced mass must be
-requested on the storage weak form (``assembly_options`` of the
+keeping its base element:
+
+* ``"tri3r"``, ``"quad4r"``, ``"hex8r"`` and ``"tet4r"`` evaluate the
+  interpolation at the element centre whatever ``n_elm_gp`` and default to
+  1 point. Another ``n_elm_gp`` raises a warning: selective integration
+  goes through the combined elements (``"quad4sri"``, ``"hex8sri"``).
+* ``"hex20r"`` (14 points) and ``"tet10r"`` (4 points) keep the full
+  interpolation and only change the default rule: with another ``n_elm_gp``
+  they are ``"hex20"`` and ``"tet10"`` with that rule, and a warning is
+  raised.
+
+In dynamics the mass does not follow a reduced stiffness: it is assembled on
+the element of the mesh with its full rule (4 points on a ``"tet4"`` mesh
+even with ``elm_type="tet4r"``), on the reference configuration. A reduced
+mass must be requested on the storage weak form (``assembly_options`` of the
 :py:class:`~fedoo.weakform.Inertia` given to ``set_inertia``) and raises a
 warning.
 
@@ -48,6 +55,7 @@ interpolation, for instance quadratic displacement and linear pressure
 
    get_all
    get_element
+   get_full_integration
    is_reduced_integration
 """
 
@@ -82,6 +90,7 @@ from .element_list import (
     get_all,
     get_default_n_gp,
     get_element,
+    get_full_integration,
     get_node_elm_coordinates,
     is_reduced_integration,
 )

@@ -232,7 +232,7 @@ class Tet10r(Tet10):
     name = "tet10r"
     default_n_gp = 4
     n_nodes = 10
-    reduced_integration = True
+    full_n_gp = Tet10.default_n_gp
 
     # Same 10-node quadratic interpolation as Tet10, but integrated with the
     # 4-point rule instead of the default accurate 15-point rule. This matches
