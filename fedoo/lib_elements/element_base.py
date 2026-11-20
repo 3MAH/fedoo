@@ -2,6 +2,95 @@ from itertools import product
 
 import numpy as np
 
+_KERNELS = []  # [small_det, small_inv] numba kernels, or [None, None]
+
+
+def _kernels():
+    """Return the numba det/inv kernels, or [None, None] without numba.
+
+    Imported on first use: fedoo.core imports this module.
+    """
+    if not _KERNELS:
+        try:
+            from fedoo.core._numba_kernels import small_det, small_inv
+        except ImportError:
+            small_det = small_inv = None
+        _KERNELS.extend((small_det, small_inv))
+    return _KERNELS
+
+
+def _as_stack(a):
+    """(..., d, d) float64 array as a C contiguous (n, d, d) stack, or None if
+    the numba kernels do not apply."""
+    if (
+        a.dtype != np.float64
+        or a.ndim < 2
+        or a.shape[-1] not in (2, 3)
+        or a.shape[-2] != a.shape[-1]
+        or a.size == 0
+        or _kernels()[0] is None
+    ):
+        return None
+    from fedoo.core._sparsematrix import _set_numba_threads
+
+    _set_numba_threads()
+    return np.ascontiguousarray(a).reshape(-1, a.shape[-1], a.shape[-1])
+
+
+def _small_det(a):
+    """Determinants of a stack of 2x2 or 3x3 matrices, in closed form.
+
+    Computed by the numba kernel when it applies, with identical results.
+    """
+    stack = _as_stack(a)
+    if stack is not None:
+        out = np.empty(stack.shape[0])
+        _kernels()[0](stack, out)
+        return out.reshape(a.shape[:-2])
+    if a.shape[-1] == 2:
+        return a[..., 0, 0] * a[..., 1, 1] - a[..., 0, 1] * a[..., 1, 0]
+    return (
+        a[..., 0, 0] * (a[..., 1, 1] * a[..., 2, 2] - a[..., 1, 2] * a[..., 2, 1])
+        + a[..., 0, 1] * (a[..., 1, 2] * a[..., 2, 0] - a[..., 1, 0] * a[..., 2, 2])
+        + a[..., 0, 2] * (a[..., 1, 0] * a[..., 2, 1] - a[..., 1, 1] * a[..., 2, 0])
+    )
+
+
+def _small_inv(a):
+    """Inverses of a stack of square matrices: closed form (adjugate) for 2x2
+    and 3x3, numpy.linalg.inv otherwise or if a matrix is singular (which then
+    raises LinAlgError as before). The closed form is computed by the numba
+    kernel when it applies, with identical results."""
+    if a.shape[-1] not in (2, 3) or a.shape[-2] != a.shape[-1]:
+        return np.linalg.inv(a)
+    stack = _as_stack(a)
+    if stack is not None:
+        out = np.empty_like(stack)
+        if not _kernels()[1](stack, out):
+            return np.linalg.inv(a)
+        return out.reshape(a.shape)
+    inv = np.empty_like(a)
+    if a.shape[-1] == 2:
+        inv[..., 0, 0] = a[..., 1, 1]
+        inv[..., 0, 1] = -a[..., 0, 1]
+        inv[..., 1, 0] = -a[..., 1, 0]
+        inv[..., 1, 1] = a[..., 0, 0]
+    else:
+        inv[..., 0, 0] = a[..., 1, 1] * a[..., 2, 2] - a[..., 1, 2] * a[..., 2, 1]
+        inv[..., 1, 0] = a[..., 1, 2] * a[..., 2, 0] - a[..., 1, 0] * a[..., 2, 2]
+        inv[..., 2, 0] = a[..., 1, 0] * a[..., 2, 1] - a[..., 1, 1] * a[..., 2, 0]
+        inv[..., 0, 1] = a[..., 0, 2] * a[..., 2, 1] - a[..., 0, 1] * a[..., 2, 2]
+        inv[..., 1, 1] = a[..., 0, 0] * a[..., 2, 2] - a[..., 0, 2] * a[..., 2, 0]
+        inv[..., 2, 1] = a[..., 0, 1] * a[..., 2, 0] - a[..., 0, 0] * a[..., 2, 1]
+        inv[..., 0, 2] = a[..., 0, 1] * a[..., 1, 2] - a[..., 0, 2] * a[..., 1, 1]
+        inv[..., 1, 2] = a[..., 0, 2] * a[..., 1, 0] - a[..., 0, 0] * a[..., 1, 2]
+        inv[..., 2, 2] = a[..., 0, 0] * a[..., 1, 1] - a[..., 0, 1] * a[..., 1, 0]
+    det = _small_det(a)
+    if not np.all(det != 0):
+        return np.linalg.inv(a)
+    inv /= det[..., None, None]
+    return inv
+
 
 def _monomial_exponents(ndim, max_degree):
     """Exponent tuples of the monomials in ``ndim`` variables, ordered by
@@ -142,7 +231,13 @@ class Element:
         # enj: Element, Nodes, PhysDim
         # Result: (Nel, n_gp, dim_ref, dim_phys)
         n_nodes = dnn_xi[0].shape[-1]
-        self.jacobian_matrix = np.einsum("gin,enj->egij", dnn_xi, vec_x[:, :n_nodes])
+        # tensordot (one matrix product), same values as
+        # np.einsum("gin,enj->egij", dnn_xi, vec_x[:, :n_nodes])
+        self.jacobian_matrix = np.ascontiguousarray(
+            np.tensordot(np.asarray(dnn_xi), vec_x[:, :n_nodes], axes=(2, 1)).transpose(
+                2, 0, 1, 3
+            )
+        )
 
         # Determinant calculation based on dimensions
         # Last two dims of jacobian_matrix are (dim_ref, dim_phys)
@@ -151,7 +246,10 @@ class Element:
 
         if d_ref == d_phys:
             # Standard square Jacobian (e.g., 2D element in 2D space)
-            self.detJ = np.abs(np.linalg.det(self.jacobian_matrix))
+            if d_ref in (2, 3):
+                self.detJ = np.abs(_small_det(self.jacobian_matrix))
+            else:
+                self.detJ = np.abs(np.linalg.det(self.jacobian_matrix))
 
         elif d_ref == 1:
             # 1D Element in 2D or 3D space (Line/Bar)
@@ -232,7 +330,7 @@ class Element:
 
         if J.shape[-2] == J.shape[-1]:
             # Square matrix: (e.g., 2D element in 2D space)
-            self.inv_jacobian_matrix = np.linalg.inv(J)
+            self.inv_jacobian_matrix = _small_inv(J)
         else:
             # Manifold case: (e.g., 2D shell in 3D space)
             JT = J.transpose(0, 1, 3, 2)
@@ -521,7 +619,7 @@ class Element2D(Element):
             # This makes the Jacobian square and invertible!
             self.jacobian_matrix = self.jacobian_matrix @ R_plane.transpose(0, 1, 3, 2)
 
-        self.inv_jacobian_matrix = np.linalg.inv(self.jacobian_matrix)
+        self.inv_jacobian_matrix = _small_inv(self.jacobian_matrix)
 
     def get_local_frame_from_jacobian(self, guide_x=None):
         """Compute a local orthonormal frame (x, y, z) for shells.

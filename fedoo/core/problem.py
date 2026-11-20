@@ -3,6 +3,7 @@ import numpy as np
 import scipy.sparse as sparse
 
 from fedoo.core.base import ProblemBase, AssemblyBase
+from fedoo.core._sparsematrix import _csr_matvec
 from fedoo.core.output import _ProblemOutput, _get_results
 
 
@@ -15,6 +16,37 @@ def _same_sparse(a, b):
         and np.array_equal(a.indices, b.indices)
         and np.array_equal(a.data, b.data)
     )
+
+
+def _reduction_operator(A, mat_cb):
+    """Operator of the reduction R = MatCB.T A MatCB on the values of A.
+
+    For any matrix with the sparsity pattern of the CSR matrix ``A``,
+    ``R = csr_matrix((op @ A.data, indices, indptr))``. R has the structural
+    pattern of the product: no entry is dropped when values cancel.
+    Each stored entry (k, l) of A contributes C[k, i] * C[l, j] to R[i, j],
+    for the nonzeros C[k, i] and C[l, j] of rows k and l of C = MatCB.
+    """
+    m = mat_cb.shape[1]
+    cb = mat_cb.tocsr()
+    k = np.repeat(np.arange(A.shape[0]), np.diff(A.indptr))
+    l = A.indices
+    row_nnz = np.diff(cb.indptr)
+    nk, nl = row_nnz[k], row_nnz[l]
+    n_pairs = nk * nl
+    entry = np.repeat(np.arange(A.nnz), n_pairs)  # entry of A of each pair
+    t = np.arange(n_pairs.sum()) - np.repeat(np.cumsum(n_pairs) - n_pairs, n_pairs)
+    pos_i = cb.indptr[k[entry]] + t // nl[entry]
+    pos_j = cb.indptr[l[entry]] + t % nl[entry]
+    keys = cb.indices[pos_i].astype(np.int64) * m + cb.indices[pos_j]
+    keys, red_entry = np.unique(keys, return_inverse=True)
+    op = sparse.csr_matrix(
+        (cb.data[pos_i] * cb.data[pos_j], (red_entry, entry)),
+        shape=(len(keys), A.nnz),
+    )
+    indptr = np.concatenate(([0], np.cumsum(np.bincount(keys // m, minlength=m))))
+    idx_dtype = np.int32 if len(keys) < 2**31 else np.int64
+    return op, (keys % m).astype(idx_dtype), indptr.astype(idx_dtype)
 
 
 class Problem(ProblemBase):
@@ -407,9 +439,87 @@ class Problem(ProblemBase):
         A, mat_cb = self.__A, self._MatCB
         cache = getattr(self, "_reduced_cache", None)
         if cache is None or cache[0] is not A or cache[1] is not mat_cb:
-            cache = (A, mat_cb, mat_cb.T @ A @ mat_cb)
+            cache = (A, mat_cb, self._reduce(A, mat_cb))
             self._reduced_cache = cache
         return cache[2]
+
+    def _reduce(self, A, mat_cb):
+        """MatCB.T A MatCB on a sparsity pattern that does not change.
+
+        The sparse triple product drops the entries that cancel, so its
+        pattern changes between Newton iterations and the direct solver redoes
+        its analysis. From the second time the same pattern of A and the same
+        MatCB are seen, R.data = op @ A.data on the structural pattern instead.
+        """
+        if not (sparse.issparse(A) and A.format == "csr") or mat_cb.shape[1] == 0:
+            return mat_cb.T @ A @ mat_cb
+        red = getattr(self, "_reduction", None)
+        same = (
+            red is not None
+            and np.array_equal(A.indptr, red["A_indptr"])
+            and np.array_equal(A.indices, red["A_indices"])
+            # MatCB is rebuilt at each increment: compare its content
+            and _same_sparse(mat_cb, red["mat_cb"])
+        )
+        if not same:
+            self._reduction = {
+                "A_indptr": A.indptr.copy(),
+                "A_indices": A.indices.copy(),
+                "mat_cb": mat_cb,
+                "op": None,
+            }
+            return mat_cb.T @ A @ mat_cb
+        if red["op"] is None:
+            red["op"], red["indices"], red["indptr"] = _reduction_operator(A, mat_cb)
+        m = mat_cb.shape[1]
+        return type(A)(
+            (_csr_matvec(red["op"], A.data), red["indices"], red["indptr"]),
+            shape=(m, m),
+        )
+
+    def _assume_sym(self):
+        """True if every leaf assembly of the problem is assembled with
+        ``assume_sym=True``. An assembly that does not say so (a constraint
+        with its own matrix, an unresolved option) counts as nonsymmetric."""
+        assembly = getattr(self, "assembly", None)
+        if assembly is None or not hasattr(assembly, "iter_leaf"):
+            return False
+        leaves = list(assembly.iter_leaf())
+        return bool(leaves) and all(
+            getattr(leaf, "assume_sym", None) is True for leaf in leaves
+        )
+
+    def _rigid_body_modes(self):
+        """Rigid body modes of the displacement (and rotation) dof, on the
+        free dof: near null space of a mechanical problem, for the algebraic
+        multigrid preconditioners (PETSc GAMG). None without a "Disp" vector.
+        With multi-point constraints, their projection MatCB.T @ modes."""
+        space = self.space
+        if (
+            self.mesh is None
+            or "Disp" not in space.list_vectors()
+            or len(self._dof_free) == 0
+        ):
+            return None
+        disp = space.get_rank_vector("Disp")
+        ndim = len(disp)
+        rot = None
+        if ndim == 3 and "Rot" in space.list_vectors():
+            rot = space.get_rank_vector("Rot")
+        n_nodes = self.mesh.n_nodes
+        nodes = np.arange(n_nodes)
+        x = self.mesh.nodes[:, :ndim] - self.mesh.nodes[:, :ndim].mean(axis=0)
+        # rotation about the axis: u_i = -x_j, u_j = x_i
+        planes = [(0, 1, 2)] if ndim == 2 else [(0, 1, 2), (1, 2, 0), (2, 0, 1)]
+        modes = np.zeros((self.n_dof, ndim + len(planes)))
+        for i, r in enumerate(disp):
+            modes[r * n_nodes + nodes, i] = 1.0
+        for k, (i, j, axis) in enumerate(planes):
+            modes[disp[i] * n_nodes + nodes, ndim + k] = -x[:, j]
+            modes[disp[j] * n_nodes + nodes, ndim + k] = x[:, i]
+            if rot is not None:
+                modes[rot[axis] * n_nodes + nodes, ndim + k] = 1.0
+        return self._MatCB.T @ modes
 
     def _solve_reduced(self, rhs):
         """Solve the free-dof system for a right-hand side (a

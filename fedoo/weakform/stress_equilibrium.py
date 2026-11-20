@@ -11,8 +11,7 @@ from fedoo.weakform.inertia import Inertia
 from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
-import simcoon as sim
-from simcoon import Rotation as SimRotation
+from fedoo.core import _simcoon
 
 
 class StressEquilibrium(WeakFormBase):
@@ -663,7 +662,7 @@ class StressEquilibrium(WeakFormBase):
             # this configuration integrates.
             if assembly._nlgeom == "TL":
                 # material tangent dS/dE (DsigmaDe_2_DSDE)
-                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                assembly.sv["TangentMatrix"] = _simcoon.lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
                     assembly.sv["Stress"].asarray(),
@@ -681,13 +680,13 @@ class StressEquilibrium(WeakFormBase):
                 # modes). _convert_Lt_tag holds the corate-specific
                 # box -> dS/dE first stage (see the corate setter).
                 stress = assembly.sv["Stress"].asarray()
-                dsde = sim.Lt_convert(
+                dsde = _simcoon.lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
                     stress,
                     self._convert_Lt_tag,
                 )
-                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                assembly.sv["TangentMatrix"] = _simcoon.lt_convert(
                     dsde,
                     assembly.sv["F"],
                     stress,
@@ -707,11 +706,12 @@ class StressEquilibrium(WeakFormBase):
             if not (np.array_equal(assembly.sv["DispGradient"], 0)):
                 # True when the problem have been updated once
                 if "DStrain" in assembly.sv:
-                    rot = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
                     # rotate strain
                     assembly.sv["Strain"] = StrainTensorList(
-                        rot.apply_strain(
+                        _simcoon.rotate_voigt(
                             assembly.sv_start["Strain"].asarray(),
+                            assembly.sv["DR"],
+                            "strain",
                         )
                         + assembly.sv["DStrain"]
                     )
@@ -1140,23 +1140,14 @@ def _comp_grad_disp_mean_dilatation(assembly, displacement):
 
 
 # function to compute F tensor (required nl corate function used with simcoon)
-def _check_F_validity(F1):
+def _check_J(det_f):
     """Reject degenerated trial kinematics (det F <= 0) as a recoverable error.
 
     A Newton iterate that inverts elements must be treated as a FAILED step
     (backtrack / time-step cut), never assembled: downstream, the polar
     decomposition aborts and the assembled matrix fills with NaN (reported
     by direct solvers as a spurious 'numerically singular').
-
-    Returns det F (per Gauss point) so callers can reuse it as J.
     """
-    # explicit 3x3 cofactor expansion: ~10x faster than np.linalg.det on
-    # (3, 3, n_gp) arrays, and the result is reused as J by _comp_Fbar
-    det_f = (
-        F1[0, 0] * (F1[1, 1] * F1[2, 2] - F1[1, 2] * F1[2, 1])
-        - F1[0, 1] * (F1[1, 0] * F1[2, 2] - F1[1, 2] * F1[2, 0])
-        + F1[0, 2] * (F1[1, 0] * F1[2, 1] - F1[1, 1] * F1[2, 0])
-    )
     min_det = det_f.min()
     if not np.isfinite(min_det) or min_det <= 1e-12:
         n_bad = int(np.count_nonzero(~(det_f > 1e-12)))
@@ -1168,18 +1159,26 @@ def _check_F_validity(F1):
     return det_f
 
 
+def _identity_like(F1):
+    """Identity tensors with the shape and order of F1 (3, 3, n_gp)."""
+    F0 = np.empty_like(F1)
+    F0[...] = np.eye(3)[:, :, None]
+    return F0
+
+
+def _deformation_gradient(grad_values):
+    """F (3, 3, n_gp), Fortran ordered, and det F of the displacement gradient,
+    with the validity check of _check_J. det F is reused as J by the callers."""
+    F1, J = _simcoon.deformation_gradient(grad_values)
+    return F1, _check_J(J)
+
+
 def _comp_F(assembly, displacement):
     grad_values = _comp_grad_disp(assembly, displacement)
-
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values, order="F")
-    _check_F_validity(F1)
+    F1, _ = _deformation_gradient(grad_values)
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
+        assembly.sv_start["F"] = _identity_like(F1)
 
 
 def _comp_F_mean_dilatation(assembly, displacement):
@@ -1189,11 +1188,7 @@ def _comp_F_mean_dilatation(assembly, displacement):
         return _comp_F(assembly, displacement)
 
     grad_values = _comp_grad_disp(assembly, displacement)
-
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values, order="F")
-    J = _check_F_validity(F1)
+    F1, J = _deformation_gradient(grad_values)
 
     theta = _element_projection(
         J.reshape(assembly.n_elm_gp, -1),
@@ -1215,26 +1210,19 @@ def _comp_F_mean_dilatation(assembly, displacement):
     assembly.sv["Jbar"] = theta
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
+        assembly.sv_start["F"] = _identity_like(F1)
 
 
 def _comp_Fbar(assembly, displacement):
     # funciton to compute F tensor using the Fbar stabilization for
     # nearly incompressible materials
     grad_values = _comp_grad_disp(assembly, displacement)
-
-    eye_3 = np.empty((3, 3, 1), order="F")
-    eye_3[:, :, 0] = np.eye(3)
-    F1 = np.add(eye_3, grad_values, order="F")
-    J = _check_F_validity(F1)
+    F1, J = _deformation_gradient(grad_values)
 
     grad_values_center = _get_grad_disp_center(assembly, displacement)
     # the element-center Jacobian must be validated too: a negative Jcenter
     # would silently turn the fractional power below into NaN
-    Fc = np.add(eye_3, grad_values_center)
-    Jcenter = _check_F_validity(Fc)
+    Fc, Jcenter = _deformation_gradient(grad_values_center)
     # Jcenter = np.mean(J.reshape(assembly.n_elm_gp, -1), axis=0)
     alpha = (Jcenter / J.reshape(assembly.n_elm_gp, -1)).ravel() ** (1 / 3)
     F1 = F1 * alpha
@@ -1247,9 +1235,7 @@ def _comp_Fbar(assembly, displacement):
         assembly.sv["_Fbar_Fc_inv"] = np.tile(Fc_inv, (1, 1, assembly.n_elm_gp))
     assembly.sv["F"] = F1
     if "F" not in assembly.sv_start:
-        F0 = np.empty_like(F1)
-        F0[...] = eye_3
-        assembly.sv_start["F"] = F0
+        assembly.sv_start["F"] = _identity_like(F1)
 
 
 def _comp_pk2_tl(assembly):
@@ -1280,16 +1266,16 @@ def _comp_linear_strain(wf, assembly, pb):
 
 def _comp_log_strain(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (D, DR, Omega) = sim.objective_rate(
+    (D, DR, Omega) = _simcoon.objective_rate(
         "log", assembly.sv_start["F"], F1, pb.dtime, False
     )
     assembly.sv["DR"] = DR
-    assembly.sv["Strain"] = StrainTensorList(sim.Log_strain(F1, True, False))
+    assembly.sv["Strain"] = StrainTensorList(_simcoon.log_strain(F1))
 
 
 def _comp_log_strain_inc(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "log", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR
@@ -1298,16 +1284,16 @@ def _comp_log_strain_inc(wf, assembly, pb):
 
 def _comp_log_strain_R(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (D, DR, Omega) = sim.objective_rate(
+    (D, DR, Omega) = _simcoon.objective_rate(
         "log_R", assembly.sv_start["F"], F1, pb.dtime, False
     )
     assembly.sv["DR"] = DR
-    assembly.sv["Strain"] = StrainTensorList(sim.Log_strain(F1, True, False))
+    assembly.sv["Strain"] = StrainTensorList(_simcoon.log_strain(F1))
 
 
 def _comp_log_strain_R_inc(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "log_R", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR
@@ -1323,13 +1309,13 @@ def _comp_log_strain_u(wf, assembly, pb):
         order="F"
     )
     assembly.sv["Strain"] = StrainTensorList(
-        sim.Log_strain(np.asfortranarray(F1.transpose(1, 0, 2)), True, False)
+        _simcoon.log_strain(np.asfortranarray(F1.transpose(1, 0, 2)))
     )
 
 
 def _comp_jaumann_strain(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "jaumann", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR
@@ -1339,7 +1325,7 @@ def _comp_jaumann_strain(wf, assembly, pb):
 def _comp_gn_strain(wf, assembly, pb):
     # green_naghdi corate
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "green_naghdi", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR

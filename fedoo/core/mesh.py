@@ -1578,6 +1578,7 @@ class Mesh(MeshBase):
         self._elm_interpolation[n_elm_gp] = elm_interpol
         self._sparse_structure[n_elm_gp] = (row.reshape(-1), col.reshape(-1))
         self._elements_geom = elm_geom  # dont depend on n_elm_gp
+        self._interpolated_elements = self.elements
 
     @staticmethod
     def _local_frame_cache_key(local_frame):
@@ -1594,7 +1595,12 @@ class Mesh(MeshBase):
         if n_elm_gp is None:
             n_elm_gp = get_default_n_gp(self.elm_type)
         cache_key = self._gaussian_quadrature_cache_key(n_elm_gp, local_frame)
-        if cache_key not in self._saved_gaussian_quadrature_mat:
+        if cache_key not in self._saved_gaussian_quadrature_mat and (
+            n_elm_gp not in self._elm_interpolation
+            or getattr(self, "_interpolated_elements", None) is not self.elements
+        ):
+            # the interpolation data only depend on the element table: moved
+            # nodes (updated lagrangian) only need the jacobian computed below
             self.init_interpolation(n_elm_gp)
 
         elm_interpol = self._elm_interpolation[n_elm_gp]

@@ -93,6 +93,18 @@ class _Derivative:  # derivative operator used in DiffOp
             return NotImplemented
 
 
+def _mul_coef(a, b):
+    """a * b for two coefficients (numbers or arrays), without the product
+    when one of them is the number 1: the other one is returned as is, so
+    that an array coefficient may be shared by several terms (it must not be
+    modified in place)."""
+    if isinstance(a, Number) and a == 1:
+        return b
+    if isinstance(b, Number) and b == 1:
+        return a
+    return a * b
+
+
 class DiffOp:
     # Set priority higher than NumPy's (usually 0.0 or 1.0)
     __array_priority__ = 100.0
@@ -165,13 +177,13 @@ class DiffOp:
                         res += DiffOp(
                             [A.op[ii]],
                             [self.op_vir[jj]],
-                            [A.coef[ii] * self.coef[jj]],
+                            [_mul_coef(A.coef[ii], self.coef[jj])],
                         )
                     elif A.op[ii] == 1 and self.op_vir[jj] == 1:  # si c'est l'inverse
                         res += DiffOp(
                             [self.op[ii]],
                             [A.op_vir[jj]],
-                            [A.coef[ii] * self.coef[jj]],
+                            [_mul_coef(A.coef[ii], self.coef[jj])],
                         )
                     else:
                         raise NameError("Impossible operation")
@@ -183,7 +195,7 @@ class DiffOp:
                 if A == 1:
                     return self
 
-            return DiffOp(self.op, self.op_vir, [A * cc for cc in self.coef])
+            return DiffOp(self.op, self.op_vir, [_mul_coef(A, cc) for cc in self.coef])
 
     def __radd__(self, A):
         return self + A

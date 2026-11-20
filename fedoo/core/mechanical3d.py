@@ -4,6 +4,7 @@
 import numpy as np
 from simcoon import Rotation
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core._simcoon import rotate_voigt
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 # Voigt slots of the stress-free components (33, 13, 23) of a plane-stress state
@@ -205,6 +206,17 @@ class Mechanical3D(ConstitutiveLaw):
             raise ValueError(f"got {len(frames)} material frames for {n_points} values")
         return Rotation.from_matrix(frames)
 
+    @staticmethod
+    def _frames_to_DR(frames, n_points=1):
+        """Material frames ``(n, 3, 3)`` as the rotation matrices of ``rotate_voigt``:
+        one ``(3, 3)`` matrix for every point, or ``(3, 3, n)`` with one per point."""
+        frames = np.asarray(frames, dtype=float).reshape(-1, 3, 3)
+        if len(frames) == 1:
+            return frames[0]
+        if n_points != 1 and len(frames) != n_points:
+            raise ValueError(f"got {len(frames)} material frames for {n_points} values")
+        return np.asfortranarray(frames.transpose(1, 2, 0))
+
     def _initial_material_frame(self, assembly):
         """Return the supplied, unconvected frame at every integration point."""
         frame = self.get_local_frame(assembly)
@@ -301,9 +313,7 @@ class Mechanical3D(ConstitutiveLaw):
         if n_points == 1 and len(frames) > 1:
             value = np.repeat(value.reshape(6, 1), len(frames), axis=1)
             n_points = len(frames)
-        rotation = self._rotation_from_frames(frames, n_points, batch=value.ndim >= 2)
-        apply = rotation.apply_stress if kind == "stress" else rotation.apply_strain
-        return apply(value, active=active)
+        return rotate_voigt(value, self._frames_to_DR(frames, n_points), kind, active)
 
     def local2global_stress(self, stress, assembly=None, current=True):
         """Express stress Voigt vector(s) from material to global axes."""
@@ -336,8 +346,9 @@ class Mechanical3D(ConstitutiveLaw):
         n_points = max(n_values, n_frames)
         if n_values == 1 and n_points > 1:
             H_array = np.repeat(H_array[:, :, None], n_points, axis=2)
-        rotation = self._rotation_from_frames(frames, n_points, batch=H_array.ndim >= 3)
-        return rotation.apply_stiffness(H_array, active=active)
+        return rotate_voigt(
+            H_array, self._frames_to_DR(frames, n_points), "stiffness", active
+        )
 
     def local2global_H(self, H, assembly=None, current=True):
         """Rotate a material stiffness to global axes using Simcoon."""
@@ -824,9 +835,8 @@ class MechanicalUMAT(Mechanical3D):
                 assembly._nlgeom
                 and getattr(assembly, "_kinematic_form", "rate") != "total"
             ):
-                rot = Rotation.from_matrix(np.asarray(DR_local).transpose(2, 0, 1))
-                strain_start = rot.apply_strain(strain_start)
-                stress_start = rot.apply_stress(stress_start)
+                strain_start = rotate_voigt(strain_start, DR_local, "strain")
+                stress_start = rotate_voigt(stress_start, DR_local, "stress")
             if incremental_strain:
                 dstrain_local = self.global2local_strain(
                     assembly.sv["DStrain"], assembly, current=False

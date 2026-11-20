@@ -225,8 +225,12 @@ def test_mumps_symmetry_mode(monkeypatch, symmetric, expected_sym):
         def __init__(self, sym=None):
             calls.append(sym)
 
-        def factor(self, A):
+        def set_matrix(self, A, symmetric=False):
             matrices.append(A)
+
+        def factor(self, A=None, reuse_analysis=False):
+            if A is not None:
+                matrices.append(A)
 
         def solve(self, B):
             return B
@@ -243,6 +247,146 @@ def test_mumps_symmetry_mode(monkeypatch, symmetric, expected_sym):
     assert all((matrix != expected_A).nnz == 0 for matrix in matrices)
 
 
+def test_mumps_threads_follow_the_user_setting(monkeypatch):
+    """fedoo caps the MUMPS threads at 8 unless OMP_NUM_THREADS is set."""
+    monkeypatch.setenv("OMP_NUM_THREADS", "3")
+    assert base._mumps_threads() is None
+    monkeypatch.delenv("OMP_NUM_THREADS")
+    assert 1 <= base._mumps_threads() <= 8
+
+
+def test_mumps_symmetric_legacy_context(monkeypatch):
+    """python-mumps 0.0.6 has no ``sym`` argument: the symmetry is given
+    with the matrix to ``set_matrix``."""
+    calls = []
+
+    class LegacyMumpsContext:
+        def __init__(self):
+            pass
+
+        def set_matrix(self, A, symmetric=False):
+            calls.append(("set_matrix", symmetric, A.nnz))
+
+        def factor(self, A=None, reuse_analysis=False):
+            calls.append(("factor", A, reuse_analysis))
+
+        def solve(self, B):
+            return B
+
+    monkeypatch.setitem(
+        sys.modules, "mumps", SimpleNamespace(Context=LegacyMumpsContext)
+    )
+
+    A = sp.csr_matrix([[2.0, 1.0], [1.0, -1.0]])
+    B = np.ones(2)
+    assert np.array_equal(_solver_mumps(A, B, symmetric=True), B)
+    # full matrix given, set_matrix keeps its upper triangle
+    assert calls == [("set_matrix", True, 4), ("factor", None, False)]
+
+
+def test_mumps_factor_reuses_analysis_on_same_pattern(monkeypatch):
+    """The analysis is reused only while the sparsity pattern is unchanged,
+    explicit zeros included."""
+    reuse = []
+
+    class FakeMumpsContext:
+        def set_matrix(self, A, symmetric=False):
+            pass
+
+        def factor(self, A=None, reuse_analysis=False):
+            reuse.append(reuse_analysis)
+
+        def solve(self, B):
+            return B
+
+    monkeypatch.setitem(sys.modules, "mumps", SimpleNamespace(Context=FakeMumpsContext))
+
+    A = sp.csr_matrix([[2.0, 1.0], [1.0, -1.0]])
+    A_zero = A.copy()
+    A_zero.data[1] = 0.0  # explicit zero: same pattern
+    A_other = sp.csr_matrix([[2.0, 0.0], [1.0, -1.0]])
+    factor = _MumpsFactor()
+    for M in (A, 3.0 * A, A_zero, A_other, A_other):
+        factor.factor(M)
+    assert reuse == [False, True, True, False, True]
+
+
+@pytest.mark.skipif(not USE_MUMPS, reason="python-mumps not installed")
+@pytest.mark.parametrize("symmetric", [False, True])
+def test_mumps_values_updated_in_place(symmetric):
+    """With an unchanged pattern, the new values are written into the arrays
+    held by the python-mumps context (no set_matrix): same solutions."""
+    from scipy.sparse.linalg import spsolve
+
+    n = 60
+    A = sp.random(n, n, density=0.15, random_state=3, format="csr")
+    A = (A + A.T + 10 * sp.eye(n)).tocsr()
+    A.sort_indices()
+    b = np.arange(n, dtype=float)
+    factor = _MumpsFactor(symmetric)
+    factor.factor(A)
+    assert factor._entries is not None
+    for scale in (2.0, 0.5):
+        M = A.copy()
+        M.data = M.data * (1 + 0.3 * np.cos(scale * np.arange(M.nnz)))
+        M = ((M + M.T) * 0.5).tocsr()
+        M.sort_indices()
+        assert np.array_equal(M.indices, A.indices)
+        factor.factor(M)
+        ref = spsolve(M.tocsc(), b)
+        assert np.allclose(
+            factor.solve(b), ref, rtol=1e-10, atol=1e-12 * abs(ref).max()
+        )
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+def test_reduction_operator_matches_product(seed):
+    """The fixed-pattern reduction gives MatCB.T A MatCB, with a pattern that
+    does not depend on the values of A."""
+    from fedoo.core.problem import _reduction_operator
+
+    rng = np.random.default_rng(seed)
+    n = 40
+    A = sp.random(n, n, density=0.2, random_state=seed, format="csr")
+    A = (A + A.T + sp.eye(n)).tocsr()
+    # free dof (identity), blocked dof (empty rows) and MPC rows
+    free = np.sort(rng.choice(n, 25, replace=False))
+    slave = np.setdiff1d(np.arange(n), free)[:8]
+    rows = list(free) + list(np.repeat(slave, 2))
+    cols = list(range(25)) + list(rng.integers(0, 25, 2 * len(slave)))
+    vals = [1.0] * 25 + list(rng.normal(size=2 * len(slave)))
+    mat_cb = sp.coo_matrix((vals, (rows, cols)), shape=(n, 25)).tocsc()
+
+    op, indices, indptr = _reduction_operator(A, mat_cb)
+    for data in (A.data, rng.normal(size=A.nnz), np.zeros(A.nnz)):
+        Ad = sp.csr_matrix((data, A.indices, A.indptr), shape=A.shape)
+        R = sp.csr_matrix((op @ data, indices, indptr), shape=(25, 25))
+        ref = (mat_cb.T @ Ad @ mat_cb).toarray()
+        assert np.allclose(R.toarray(), ref, rtol=1e-12, atol=1e-12)
+        assert R.nnz == len(indices)  # zeros kept: fixed pattern
+
+
+def test_reduced_matrix_pattern_is_fixed():
+    """Repeated reductions with the same pattern of A keep the same pattern."""
+    pb = _build_plate_problem()
+    pb.solve()
+    A = pb.get_A()
+    assert A.format == "csr"
+    patterns = []
+    for scale in (1.0, 2.0, 0.5):
+        A2 = A.copy()
+        A2.data *= scale
+        A2.data[::7] = 0.0  # values that would be dropped by the product
+        pb.set_A(A2)
+        R = pb._reduced_system_matrix()
+        ref = pb._MatCB.T @ A2 @ pb._MatCB
+        assert abs(R - ref).max() <= 1e-12 * abs(ref).max()
+        patterns.append((R.indptr.copy(), R.indices.copy()))
+    # first call: plain product; the operator is built the second time
+    assert np.array_equal(patterns[1][0], patterns[2][0])
+    assert np.array_equal(patterns[1][1], patterns[2][1])
+
+
 def test_set_solver_symmetric_option_and_factor_reuse():
     """The direct solver and its reuse context share the symmetry choice."""
     pb = _build_plate_problem()
@@ -255,6 +399,32 @@ def test_set_solver_symmetric_option_and_factor_reuse():
         assert pb._factor_context._solver.mtype == -2
     elif USE_MUMPS:
         assert pb._ProblemBase__solver[1] is _solver_mumps
+
+
+@pytest.mark.skipif(not USE_MUMPS, reason="python-mumps not installed")
+def test_direct_solver_is_symmetric_when_the_assemblies_assume_it():
+    """Without a choice, python-mumps factorizes LDL^T when every assembly is
+    assembled as symmetric, and LU as soon as one is not."""
+    reference = _build_plate_problem()
+    reference.set_solver("direct", symmetric=False)
+    reference.solve()
+
+    pb = _build_plate_problem()
+    assert pb._solver_auto_symmetric and pb._solver_symmetric is False
+    pb.solve()
+    assert pb._solver_symmetric is True
+    assert pb._kept_solver._symmetric is True
+    np.testing.assert_allclose(pb.get_disp(), reference.get_disp(), rtol=1e-9)
+
+    pb.assembly.assume_sym = False
+    pb.solve()
+    assert pb._solver_symmetric is False
+    assert pb._kept_solver._symmetric is False
+    np.testing.assert_allclose(pb.get_disp(), reference.get_disp(), rtol=1e-9)
+
+    pb.set_solver("direct", symmetric=True)  # an explicit choice is kept
+    pb.solve()
+    assert pb._solver_symmetric is True and not pb._solver_auto_symmetric
 
 
 def test_set_solver_symmetric_requires_bool():

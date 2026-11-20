@@ -2,7 +2,7 @@ from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.weakform.inertia import Inertia, RotaryInertia
-from scipy.spatial.transform import Rotation
+from fedoo.core import _simcoon
 import numpy as np
 
 
@@ -189,7 +189,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
 
         # Local axes are rows: a spatial rotation Q updates R to R Q.T.
         rigid_rotmat_trial = assembly.sv["RigidRotationMat"] @ (
-            Rotation.from_rotvec(delta_rotvec).as_matrix().transpose(0, 2, 1)
+            _simcoon.rotvec_to_matrix(delta_rotvec).transpose(0, 2, 1)
         )
 
         current_local_frame = mesh.get_element_local_frame()
@@ -252,7 +252,7 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
             ).transpose(0, 2, 1)
 
         nodes_rotmat = (
-            Rotation.from_rotvec(delta_rotvec_nodes.T).as_matrix()  # transpose(0,2,1)
+            _simcoon.rotvec_to_matrix(delta_rotvec_nodes.T)  # transpose(0,2,1)
             @ assembly.sv["_NodesRotationMatrix"]
         )
 
@@ -270,21 +270,15 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
             n_slice = slice(rot_var[0] * mesh.n_nodes, (rot_var[0] + 3) * mesh.n_nodes)
 
             if np.isscalar(pb._U) and pb._U == 0:
-                pb._dU[n_slice] = (
-                    Rotation.from_matrix(nodes_rotmat).as_rotvec().T.ravel()
-                )
+                pb._dU[n_slice] = _simcoon.matrix_to_rotvec(nodes_rotmat).T.ravel()
             else:
-                nodes_rotmat_from_U = Rotation.from_rotvec(
+                nodes_rotmat_from_U = _simcoon.rotvec_to_matrix(
                     pb._U[n_slice].reshape(3, -1).T
-                ).as_matrix()
-
-                pb._dU[n_slice] = (
-                    Rotation.from_matrix(
-                        nodes_rotmat @ nodes_rotmat_from_U.transpose(0, 2, 1)
-                    )
-                    .as_rotvec()
-                    .T.ravel()
                 )
+
+                pb._dU[n_slice] = _simcoon.matrix_to_rotvec(
+                    nodes_rotmat @ nodes_rotmat_from_U.transpose(0, 2, 1)
+                ).T.ravel()
 
             for bc in pb.bc.list_all():
                 if bc.bc_type == "Dirichlet" and bc.variable in rot_var:
@@ -310,10 +304,8 @@ class PlateEquilibriumFI(WeakFormBase):  # plate weakform whith full integration
             ),
         )
 
-        rot_loc = (
-            Rotation.from_matrix(T_loc.reshape(-1, 3, 3))
-            .as_rotvec()
-            .reshape(mesh.n_elements, mesh.n_elm_nodes, 3)
+        rot_loc = _simcoon.matrix_to_rotvec(T_loc.reshape(-1, 3, 3)).reshape(
+            mesh.n_elements, mesh.n_elm_nodes, 3
         )
 
         n_dof = mesh.n_elm_nodes * mesh.n_elements

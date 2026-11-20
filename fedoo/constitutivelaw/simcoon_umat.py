@@ -1,6 +1,7 @@
 # derive de ConstitutiveLaw
 # compatible with the simcoon strain and stress notation
 
+from fedoo.core import base
 from fedoo.core.base import InvalidKinematicStateError
 from fedoo.core.mechanical3d import MechanicalUMAT
 import simcoon as sim
@@ -1358,6 +1359,7 @@ class Simcoon(MechanicalUMAT):
                 self.umat_name,
                 *args,
                 **kinematic_form,
+                n_threads=base.N_THREADS,
                 work_correction=work_correction,
                 tangent_output=tangent_output,
                 ncp=self.ncp,

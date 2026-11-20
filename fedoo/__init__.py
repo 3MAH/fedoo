@@ -1,3 +1,12 @@
+import importlib.util as _importlib_util
+import os as _os
+import sys as _sys
+
+if _sys.platform == "darwin" and _importlib_util.find_spec("pypardiso") is None:
+    # libomp sleeps its threads after each parallel region on macOS: a 1 ms spin
+    # spares MUMPS the wake-ups. Not with pypardiso, whose MKL reads it too.
+    _os.environ.setdefault("KMP_BLOCKTIME", "1")
+
 from . import (
     constitutivelaw,
     constraint,
@@ -56,15 +65,24 @@ class get_config:
     The returned information are:
         * 'fedoo version': The current version of fedoo (non modifiable)
         * 'USE_PYPARDISO': bool that define if the pardiso direct solver may be used
-        * 'USE_PETSC': bool that define if the mumps direct solver should be used.
+        * 'USE_MUMPS': bool that define if the standalone MUMPS direct solver
+          (python-mumps) should be used.
+        * 'USE_PETSC': bool that define if PETSc (MUMPS through petsc4py) should
+          be used as direct solver. petsc4py is installed by the user.
         * 'USE_UMFPACK': bool that define if the scikit-umfpack solver may be used
-          Only one between pardiso, petsc and umfpack direct solver may be used.
+          Only one between pardiso, mumps, petsc and umfpack direct solver may
+          be used. The choice applies to the problems whose solver is set
+          afterwards (set_solver or problem creation).
         * 'USE_PYVISTA': bool that define if the pyvista library may be used
         * 'USE_MPL': bool that define if the matplotlib library may be used
         * 'USE_PYVISTA_QT': bool that define if the pyvista_qt library
            may be used for background plotter. If True, it is the default plotter
            for DataSet objects.
         * 'USE_PANDAS': bool that define if the pandas library may be used
+        * 'N_THREADS': int, number of threads of the simcoon batch calls (constitutive
+          laws, objective rates, tangent conversions) and of the numba kernels of
+          the assembly. 0 (default) uses all the cores (the performance cores of an
+          Apple chip for numba), 1 runs them serially.
 
     To change a configuration option use fedoo.get_config()[option] = value
     To print the current configuration use: fedoo.show_config()
@@ -80,12 +98,14 @@ class get_config:
         self._dict = {
             "fedoo version": __version__,
             "USE_PYPARDISO": core.base.USE_PYPARDISO,
+            "USE_MUMPS": core.base.USE_MUMPS,
             "USE_PETSC": core.base.USE_PETSC,
             "USE_UMFPACK": core.base.USE_UMFPACK,
             "USE_PYVISTA": core.mesh.USE_PYVISTA,
             "USE_MPL": core.dataset.USE_MPL,
             "USE_PYVISTA_QT": core.dataset.USE_PYVISTA_QT,
             "USE_PANDAS": core.dataset.USE_PANDAS,
+            "N_THREADS": core.base.N_THREADS,
         }
 
     def __repr__(self):
@@ -103,23 +123,18 @@ class get_config:
     def __setitem__(self, item, value):
         if item == "fedoo version":
             raise ValueError("fedoo version is not modifiable")
-        if item == "USE_PYPARDISO":
-            core.base.USE_PYPARDISO = value
-            if value:
-                core.base.USE_UMFPACK = False
-                core.base.USE_PETSC = False
-                core.base._reload_external_solvers(get_config())
-        elif item == "USE_PETSC":
-            core.base.USE_PETSC = value
-            if value:
-                core.base.USE_PYPARDISO = False
-                core.base.USE_UMFPACK = False
-                core.base._reload_external_solvers(get_config())
-        elif item == "USE_UMFPACK":
-            core.base.USE_UMFPACK = value
-            if value:
-                core.base.USE_PYPARDISO = False
-                core.base.USE_PETSC = False
+        solvers = ("USE_PYPARDISO", "USE_MUMPS", "USE_PETSC", "USE_UMFPACK")
+        if item in solvers:
+            if value and item == "USE_PETSC" and not core.base.HAS_PETSC:
+                raise ImportError(
+                    "petsc4py is not installed. Install it with conda "
+                    '("conda install -c conda-forge petsc4py") or pip.'
+                )
+            setattr(core.base, item, value)
+            if value:  # a single direct solver
+                for other in solvers:
+                    if other != item:
+                        setattr(core.base, other, False)
                 core.base._reload_external_solvers(get_config())
         elif item == "USE_PYVISTA":
             core.mesh.USE_PYVISTA = value
@@ -131,6 +146,12 @@ class get_config:
             core.mesh.USE_PYVISTA_QT = value
         elif item == "USE_PANDAS":
             core.dataset.USE_PANDAS = value
+        elif item == "N_THREADS":
+            if isinstance(value, bool) or int(value) != value or value < 0:
+                raise ValueError(
+                    "N_THREADS must be a non-negative integer (0 = all cores)"
+                )
+            core.base.N_THREADS = int(value)
         else:
             raise KeyError
 
