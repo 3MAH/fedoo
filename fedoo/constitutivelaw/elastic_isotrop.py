@@ -55,6 +55,9 @@ class ElasticIsotrop(ElasticAnisotropic):
             H[0, 1] = nu * E / (1 - nu**2)
             H[3, 3] = 0.5 * E / (1 + nu)
             H[1, 0] = H[0, 1]  # symétrie
+        elif dimension == "1Dstress":
+            # uniaxial stress (beam fibers): only sigma_11 = E eps_11
+            H[0, 0] = E
         else:
             H[0, 0] = H[1, 1] = H[2, 2] = E * (
                 1.0 / (1 + nu) + nu / ((1.0 + nu) * (1 - 2 * nu))

@@ -2,7 +2,7 @@
 # compatible with the simcoon strain and stress notation
 
 from fedoo.core.base import InvalidKinematicStateError
-from fedoo.core.mechanical3d import MechanicalUMAT
+from fedoo.core.mechanical3d import MechanicalUMAT, _constitutive_corate
 import simcoon as sim
 
 _CORATE_CODES = {
@@ -112,8 +112,12 @@ class Simcoon(MechanicalUMAT):
       stiffness / hardening parameters with this convention or the
       response will not match the intended material orientation.
 
-    * Hyperelastic laws (those with ``_Lt_from_F = True``) are gated on
-      plane stress; they remain compatible with 2Daxi at
+    * Hyperelastic laws (those with ``_Lt_from_F = True``) run in plane
+      stress (``2Dstress``) or uniaxial stress (``1Dstress``) only when
+      simcoon condenses the state itself, which fedoo asks through
+      ``simcoon.condensation_serves``; otherwise a ``NotImplementedError`` is
+      raised. Unsupported reduced states are refused for strain-driven laws
+      as well. They remain compatible with 2Daxi at
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
 
@@ -140,11 +144,22 @@ class Simcoon(MechanicalUMAT):
 
         simcoon answers: its log-strain boxes, the modular material among them,
         and the hyperelastic kernels built on F are served; the rate law and the
-        small-strain-only laws are not. A simcoon without the total formulation
-        (2.1) serves none, and the law keeps the rate update.
+        small-strain-only laws are not.
         """
-        serves = getattr(sim, "total_formulation_serves", None)
-        return serves is not None and serves(self.umat_name)
+        return bool(sim.total_formulation_serves(self.umat_name))
+
+    def _serves_reduced_state(self, ndi, assembly=None):
+        """Whether simcoon condenses the reduced state ``ndi`` for this law.
+
+        The question is asked for the formulation the law is run with on
+        ``assembly``: simcoon validates a condensed state per kinematic form,
+        and a law served in rate form may not be under the total formulation.
+        """
+        total = assembly is not None and _constitutive_corate(assembly) is None
+        if ndi == 3:
+            return True
+        options = {"kinematic_form": "total"} if total else {}
+        return bool(sim.condensation_serves(self.umat_name, ndi, **options))
 
     @property
     def manages_material_frame(self):
@@ -1314,13 +1329,6 @@ class Simcoon(MechanicalUMAT):
             raise ValueError(
                 "Invalid umat_name: expected a 5-letter simcoon name, optionally with the _closed suffix."
             )
-
-    def get_tangent_matrix(self, assembly, dimension=None):
-        # Simcoon >= 2.3 already condenses ndi=2 tangents. A second
-        # condensation would divide by the zero out-of-plane stiffness.
-        if assembly.space.get_dimension() == "2Dstress":
-            return assembly.sv["TangentMatrix"]
-        return super().get_tangent_matrix(assembly, dimension)
 
     def _umat_options(self, assembly, *, in_material_frame, ndi):
         wf = getattr(assembly, "weakform", None)
