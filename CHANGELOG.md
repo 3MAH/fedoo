@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
 ### Added
 
 - Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
