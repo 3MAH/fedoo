@@ -4,7 +4,7 @@ from fedoo.constitutivelaw.beam import BeamProperties
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.core.weakform import WeakFormBase, WeakFormSum
 from fedoo.weakform.inertia import Inertia, RotaryInertia
-from scipy.spatial.transform import Rotation
+from fedoo.core import _simcoon
 import numpy as np
 from fedoo.util.beam_tensors import BeamStressList, BeamStrainList
 
@@ -302,9 +302,7 @@ class BeamEquilibrium(WeakFormBase):
                     # Local axes are rows: a spatial rotation Q updates R to R Q.T.
                     rigid_rotmat_trial = assembly.sv[
                         "RigidRotationMat"
-                    ] @ Rotation.from_rotvec(delta_rotvec).as_matrix().transpose(
-                        0, 2, 1
-                    )
+                    ] @ _simcoon.rotvec_to_matrix(delta_rotvec).transpose(0, 2, 1)
 
                     # get rigid rotation by projection (X axis is the poutre normal)
                     rigid_rotmat = np.empty_like(rigid_rotmat_trial)
@@ -325,20 +323,20 @@ class BeamEquilibrium(WeakFormBase):
                     # compute u2, rot1 and rot2, ie the rot dof at node 1 and 2
                     # u1 = 0 as the first node is the center of the local bases
                     nodes_rotmat = (
-                        Rotation.from_rotvec(delta_rotvec_nodes.T).as_matrix()
+                        _simcoon.rotvec_to_matrix(delta_rotvec_nodes.T)
                         @ assembly.sv["_NodesRotationMatrix"]
                     )
 
-                    rot1 = Rotation.from_matrix(
+                    rot1 = _simcoon.matrix_to_rotvec(
                         rigid_rotmat
                         @ nodes_rotmat[mesh.elements[:, 0]]
                         @ initial_element_rotmat.transpose(0, 2, 1)
-                    ).as_rotvec()
-                    rot2 = Rotation.from_matrix(
+                    )
+                    rot2 = _simcoon.matrix_to_rotvec(
                         rigid_rotmat
                         @ nodes_rotmat[mesh.elements[:, 1]]
                         @ initial_element_rotmat.transpose(0, 2, 1)
-                    ).as_rotvec()
+                    )
 
                     # longitunal displacement in local coordinates (u2y=0)
                     u2x = np.linalg.norm(element_vectors, axis=1) - np.linalg.norm(
@@ -379,11 +377,9 @@ class BeamEquilibrium(WeakFormBase):
                             pb._dU[
                                 rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                                 * assembly.mesh.n_nodes
-                            ] = (
-                                Rotation.from_matrix(nodes_rotmat).as_rotvec().T
-                            ).ravel()
+                            ] = (_simcoon.matrix_to_rotvec(nodes_rotmat).T).ravel()
                         else:
-                            nodes_rotmat_from_U = Rotation.from_rotvec(
+                            nodes_rotmat_from_U = _simcoon.rotvec_to_matrix(
                                 pb._U[
                                     rot_var[0] * assembly.mesh.n_nodes : (
                                         rot_var[0] + 3
@@ -392,27 +388,22 @@ class BeamEquilibrium(WeakFormBase):
                                 ]
                                 .reshape(3, -1)
                                 .T
-                            ).as_matrix()
+                            )
 
                             # d_angle = final_angle - angle_start (computed with rotmat from angular point of view)
                             pb._dU[
                                 rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                                 * assembly.mesh.n_nodes
-                            ] = (
-                                Rotation.from_matrix(
-                                    nodes_rotmat
-                                    @ nodes_rotmat_from_U.transpose(0, 2, 1)
-                                )
-                                .as_rotvec()
-                                .T.ravel()
-                            )
+                            ] = _simcoon.matrix_to_rotvec(
+                                nodes_rotmat @ nodes_rotmat_from_U.transpose(0, 2, 1)
+                            ).T.ravel()
 
                             # Or equivalent but sigularité if angle > pi
                             # pb._dU[
                             #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             #     * assembly.mesh.n_nodes
                             # ] = (
-                            #     Rotation.from_matrix(nodes_rotmat).as_rotvec().T
+                            #     _simcoon.matrix_to_rotvec(nodes_rotmat).T
                             # ).ravel() - pb._U[
                             #     rot_var[0] * assembly.mesh.n_nodes : (rot_var[0] + 3)
                             #     * assembly.mesh.n_nodes
@@ -507,9 +498,9 @@ class BeamEquilibrium(WeakFormBase):
             #     ### WARNING only work if vectors are contigous in the variable order
             #     var = self.space.variable_rank('RotX')
             #     pb._U[var*assembly.mesh.n_nodes:(var+3)*assembly.mesh.n_nodes] = \
-            #         (Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec().T).ravel()
-            # print(Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec().T - pb.get_rot())
-            # rot_dof = Rotation.from_matrix(assembly.sv['_NodesRotationMatrix']).as_rotvec()
+            #         (_simcoon.matrix_to_rotvec(assembly.sv['_NodesRotationMatrix']).T).ravel()
+            # print(_simcoon.matrix_to_rotvec(assembly.sv['_NodesRotationMatrix']).T - pb.get_rot())
+            # rot_dof = _simcoon.matrix_to_rotvec(assembly.sv['_NodesRotationMatrix'])
 
     def get_weak_equation(self, assembly, pb):
         eps = self.space.op_beam_strain()

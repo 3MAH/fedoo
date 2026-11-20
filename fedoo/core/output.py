@@ -17,6 +17,7 @@ from fedoo.core.mesh import MultiMesh
 from fedoo.core.dataset import DataSet, MultiFrameDataSet
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import simcoon as sim
+from fedoo.core import _simcoon
 import os
 from zipfile import ZipFile, Path
 
@@ -752,9 +753,7 @@ def _get_results(
                 data = sv["Stress"].cauchy_to_log_stress_u(sv["F"])
             else:
                 F = sv["F"] if res == "LogStrainV" else sv["F"].transpose(1, 0, 2)
-                data = StrainTensorList(
-                    sim.Log_strain(np.asfortranarray(F), True, False)
-                )
+                data = StrainTensorList(_simcoon.log_strain(np.asfortranarray(F)))
             if output_type is not None and output_type != "GaussPoint":
                 data = data.convert(assemb, None, output_type)
                 data_type = output_type

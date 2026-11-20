@@ -3,7 +3,8 @@
 from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
 from fedoo.weakform.stress_equilibrium import (
     StressEquilibrium,
-    _check_F_validity,
+    _deformation_gradient,
+    _identity_like,
     _comp_grad_disp,
 )
 import numpy as np
@@ -320,19 +321,13 @@ class StressEquilibriumMixed(StressEquilibrium):
         # compute only the isochoric part of F and volume change J
         grad_values = _comp_grad_disp(assembly, displacement)
 
-        eye_3 = np.empty((3, 3, 1), order="F")
-        eye_3[:, :, 0] = np.eye(3)
-        F1 = np.add(eye_3, grad_values, order="F")
-
         # Reject inverted trial states (det F <= 0) BEFORE log(J) turns
         # them into silent NaNs, then save ln J for the pressure constraint
-        J = _check_F_validity(F1)
+        F1, J = _deformation_gradient(grad_values)
         assembly.sv["lnJ"] = np.log(J)
 
         F1 = F1 * (J.reshape(assembly.n_elm_gp, -1).ravel() ** (-1 / 3))
 
         assembly.sv["F"] = F1
         if "F" not in assembly.sv_start:
-            F0 = np.empty_like(F1)
-            F0[...] = eye_3
-            assembly.sv_start["F"] = F0
+            assembly.sv_start["F"] = _identity_like(F1)

@@ -87,6 +87,16 @@ semantic versioning.
 
 ### Changed
 
+- **Requires simcoon >= 2.6** (was 2.3). Finite strain kinematics and shell / beam
+  rotations go through the simcoon 2.6 batch calls (`G_UdX_to_F`, `rotvec_to_matrix`,
+  `matrix_to_rotvec`, `dexp_inv`) on `N_THREADS` threads: F and det F of every nlgeom formulation (standard, F-bar, mean
+  dilatation, mixed), the corotational updates of `PlateEquilibrium` and
+  `BeamEquilibrium` (in place of `scipy.Rotation`), the inverse left Jacobian of SO(3)
+  of the corotational beam and shell tangents, and the logarithmic strains
+  (`Log_strain`, now also on `N_THREADS`). Same values to rounding (det F 1e-15,
+  rotations 1e-14). On 400 000 points: F and det F 0.017 s -> 0.005 s,
+  matrix to rotation vector 0.22 s -> 0.009 s (4 threads).
+
 - **`set_solver(symmetric=None)` is the default** (was `False`): with the
   direct solver of python-mumps, a symmetric-indefinite LDL^T factorization
   is used when every assembly of the problem is assembled with

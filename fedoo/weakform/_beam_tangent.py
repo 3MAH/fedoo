@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from fedoo.core import _simcoon
+
 _TANGENT_BATCH_SIZE = 2048
 
 
@@ -23,14 +25,8 @@ def _skew(v):
 
 
 def _log_derivative(v):
-    """Inverse left Jacobian of SO(3), with its small-angle expansion."""
-    angle = np.linalg.norm(v, axis=-1)
-    a = np.asarray(1 / 12 + angle**2 / 720 + angle**4 / 30240)
-    regular = angle >= 1e-4
-    theta = angle[regular]
-    a[regular] = (1 - 0.5 * theta / np.tan(0.5 * theta)) / theta**2
-    s = _skew(v)
-    return np.eye(3) - 0.5 * s + a[..., None, None] * (s @ s)
+    """Inverse left Jacobian of SO(3) (simcoon ``dexp_inv``, numpy fallback)."""
+    return _simcoon.dexp_inv(v)
 
 
 def _strain_coefficients(wf, assembly, element_slice):
