@@ -173,9 +173,9 @@ def _moment_curvature(a, b, kappa_ratio):
 
 def test_plastic_moment_curvature_of_a_rectangle():
     a, b = 0.2, 0.1
+    rectangle = fd.constitutivelaw.BeamRectangular(_plastic_material(), a, b)
     section = fd.constitutivelaw.BeamNonLinear(
-        fd.constitutivelaw.BeamRectangular(_plastic_material(), a, b),
-        fibers=(8, 2),
+        rectangle, fibers=rectangle.fiber_quadrature(n_y=8, n_z=2)
     )
     point = _SectionPoint(section)
     # With 8 layers the elastic core edge falls on a layer boundary for
@@ -191,10 +191,10 @@ def test_plastic_moment_curvature_of_a_rectangle():
     kappa, moment = _moment_curvature(a, b, 50.0)
     assert point.stress([0, 0, 0, 0, 0, kappa])[5] == pytest.approx(moment, rel=1e-3)
     # Bending about y uses the z coordinate: M_Y = +int z sigma.
+    rectangle = fd.constitutivelaw.BeamRectangular(_plastic_material(), b, a)
     other = _SectionPoint(
         fd.constitutivelaw.BeamNonLinear(
-            fd.constitutivelaw.BeamRectangular(_plastic_material(), b, a),
-            fibers=(2, 8),
+            rectangle, fibers=rectangle.fiber_quadrature(n_y=2, n_z=8)
         )
     )
     kappa, moment = _moment_curvature(a, b, 2.0)
@@ -233,14 +233,14 @@ def test_invalid_sections_and_materials_are_refused():
     law = fd.constitutivelaw
     material = law.ElasticIsotrop(E, NU, name="steel_shared_name")
     rectangle = SECTIONS["rectangle"](material)
-    for fibers in (4, (4,), (4, 4, 4), (4.0, 4), (0, 4)):
+    for fibers in (4, (4,), (4, 4), (4, 4, 4)):
         with pytest.raises(ValueError, match="fibers"):
             law.BeamNonLinear(rectangle, fibers=fibers)
     with pytest.raises(ValueError, match="equal length"):
         law.BeamNonLinear(rectangle, fibers=([0.0], [0.0, 0.1], [0.01]))
     # two sectors leave a bending axis without stiffness
     with pytest.raises(ValueError, match="n_theta"):
-        law.BeamNonLinear(SECTIONS["circle"](material), fibers=(3, 2))
+        SECTIONS["circle"](material).fiber_quadrature(n_theta=2)
     # the section is registered under the name of its material
     with pytest.raises(TypeError, match="not a beam section"):
         law.BeamNonLinear(rectangle, material="steel_shared_name")
@@ -399,9 +399,9 @@ def test_saved_stress_is_the_fiber_stress():
 )
 def test_simcoon_plastic_moment_of_a_rectangle():
     a, b = 0.2, 0.1
+    rectangle = fd.constitutivelaw.BeamRectangular(_simcoon_epicp(), a, b)
     section = fd.constitutivelaw.BeamNonLinear(
-        fd.constitutivelaw.BeamRectangular(_simcoon_epicp(), a, b),
-        fibers=(8, 2),
+        rectangle, fibers=rectangle.fiber_quadrature(n_y=8, n_z=2)
     )
     point = _SectionPoint(section)
     for ratio in (2.0, 4.0):
@@ -425,11 +425,11 @@ def _plastic_beam(dim, shear):
     space = fd.ModelingSpace("2D" if dim == 2 else "3D")
     nodes = np.array([[0.0, 0.0, 0.0], [2.0, 0.3, 0.2], [3.0, 1.0, 0.5]])[:, :dim]
     mesh = fd.Mesh(nodes, np.array([[0, 1], [1, 2]]), "lin2")
+    rectangle = fd.constitutivelaw.BeamRectangular(
+        _plastic_material(hardening=E / 20), 0.3, 0.2, k=shear
+    )
     section = fd.constitutivelaw.BeamNonLinear(
-        fd.constitutivelaw.BeamRectangular(
-            _plastic_material(hardening=E / 20), 0.3, 0.2, k=shear
-        ),
-        fibers=(4, 2),
+        rectangle, fibers=rectangle.fiber_quadrature(n_y=4, n_z=2)
     )
     wf = fd.weakform.BeamEquilibrium(
         section, nlgeom=True, space=space, consistent_tangent=True

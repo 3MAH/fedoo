@@ -16,6 +16,34 @@ from fedoo.util.beam_tensors import BeamStressList, BeamStrainList
 import numpy as np
 
 
+def _check_quadrature_count(value, name, minimum=1):
+    if not isinstance(value, (int, np.integer)) or value < minimum:
+        raise ValueError(f"{name} must be an integer of at least {minimum}")
+
+
+def _gauss_layers(lower, upper, n_layers):
+    """Two-point Gauss rule on each of the equal layers."""
+    edges = np.linspace(lower, upper, n_layers + 1)
+    half = 0.5 * np.diff(edges)
+    center = 0.5 * (edges[:-1] + edges[1:])
+    offset = half / np.sqrt(3)
+    points = np.column_stack((center - offset, center + offset)).ravel()
+    return points, np.repeat(half, 2)
+
+
+def _polar_rule(r_int, r_ext, n_r, n_theta):
+    """Gauss-Legendre in the radius (weight r dr) times mid-sector angles."""
+    _check_quadrature_count(n_r, "n_r")
+    _check_quadrature_count(n_theta, "n_theta", minimum=3)
+    xi, weights = np.polynomial.legendre.leggauss(n_r)
+    radius = 0.5 * (r_ext + r_int) + 0.5 * (r_ext - r_int) * xi
+    radial_weights = 0.5 * (r_ext - r_int) * weights * radius
+    angle = (np.arange(n_theta) + 0.5) * 2 * np.pi / n_theta
+    rho, theta = np.meshgrid(radius, angle, indexing="ij")
+    w = np.repeat(radial_weights, n_theta) * (2 * np.pi / n_theta)
+    return (rho * np.cos(theta)).ravel(), (rho * np.sin(theta)).ravel(), w
+
+
 class BeamProperties(ConstitutiveLaw):
     section_type = "generic"
     recovery = "linear"
@@ -24,6 +52,13 @@ class BeamProperties(ConstitutiveLaw):
     is_section_law = False
     section_dimensions = ()
     section_registry = {}
+
+    def fiber_quadrature(self):
+        """Return physical centroid-relative (y, z, weights) for fiber integration."""
+        raise ValueError(
+            f"No default fiber quadrature for section type {self.section_type!r}; "
+            "provide fibers=(y, z, weights) explicitly"
+        )
 
     @property
     def n_points(self):
@@ -590,8 +625,16 @@ class BeamMesh(BeamProperties):
         """Section Gauss points and area weights as ``(y, z, weights)``."""
         return tuple(values.copy() for values in self._fibers)
 
+    def fiber_quadrature(self):
+        """Use the section mesh's Gauss points and area weights."""
+        return self.fibers
+
 
 class BeamCircular(BeamProperties):
+    def fiber_quadrature(self, *, n_r=3, n_theta=16):
+        """Use n_r radial Gauss points and n_theta equal angular sectors."""
+        return _polar_rule(0.0, self.r, n_r, n_theta)
+
     section_type = "circle"
     section_dimensions = ("r",)
     reference_bounds = (-1.0, 1.0, -1.0, 1.0)
@@ -668,6 +711,10 @@ class BeamCircular(BeamProperties):
 
 
 class BeamPipe(BeamProperties):
+    def fiber_quadrature(self, *, n_r=2, n_theta=16):
+        """Use n_r radial Gauss points and n_theta equal angular sectors."""
+        return _polar_rule(self.r_int, self.r_ext, n_r, n_theta)
+
     section_type = "pipe"
     section_dimensions = ("r_int", "r_ext")
     reference_bounds = (-1.0, 1.0, -1.0, 1.0)
@@ -753,6 +800,15 @@ class BeamPipe(BeamProperties):
 
 
 class BeamRectangular(BeamProperties):
+    def fiber_quadrature(self, *, n_y=4, n_z=4):
+        """Use two Gauss points per layer in each section direction."""
+        _check_quadrature_count(n_y, "n_y")
+        _check_quadrature_count(n_z, "n_z")
+        y, wy = _gauss_layers(-self.a / 2, self.a / 2, n_y)
+        z, wz = _gauss_layers(-self.b / 2, self.b / 2, n_z)
+        y, z = np.meshgrid(y, z, indexing="ij")
+        return y.ravel(), z.ravel(), np.outer(wy, wz).ravel()
+
     section_type = "rectangle"
     section_dimensions = ("a", "b")
     reference_bounds = (-0.5, 0.5, -0.5, 0.5)

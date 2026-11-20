@@ -10,7 +10,7 @@ from fedoo.constitutivelaw._material_points import (
     _MaterialPointAssembly,
     _tangent_array,
 )
-from fedoo.constitutivelaw.beam import BeamMesh, BeamProperties
+from fedoo.constitutivelaw.beam import BeamProperties
 from fedoo.core.base import ConstitutiveLaw
 from fedoo.util.beam_recovery import SectionRecoveryUnavailable
 from fedoo.util.beam_tensors import BeamStressList
@@ -22,82 +22,18 @@ _AXIAL = [0, 4, 5]
 _ELASTIC = [1, 2, 3]
 
 
-def _gauss_layers(lower, upper, n_layers):
-    """Two-point Gauss rule on each of ``n_layers`` equal layers."""
-    edges = np.linspace(lower, upper, n_layers + 1)
-    half = 0.5 * np.diff(edges)
-    center = 0.5 * (edges[:-1] + edges[1:])
-    offset = half / np.sqrt(3)
-    points = np.column_stack((center - offset, center + offset)).ravel()
-    return points, np.repeat(half, 2)
-
-
-def _polar_rule(r_int, r_ext, n_r, n_theta):
-    """Gauss-Legendre in the radius (weight r dr) times mid-sector angles."""
-    xi, weights = np.polynomial.legendre.leggauss(n_r)
-    radius = 0.5 * (r_ext + r_int) + 0.5 * (r_ext - r_int) * xi
-    radial_weights = 0.5 * (r_ext - r_int) * weights * radius
-    angle = (np.arange(n_theta) + 0.5) * 2 * np.pi / n_theta
-    rho, theta = np.meshgrid(radius, angle, indexing="ij")
-    w = np.repeat(radial_weights, n_theta) * (2 * np.pi / n_theta)
-    return (rho * np.cos(theta)).ravel(), (rho * np.sin(theta)).ravel(), w
-
-
 def _explicit_fibers(fibers):
-    """Arrays (y, z, weights) if ``fibers`` lists the fibers, else None."""
+    """Convert explicit section points and weights to arrays."""
     try:
-        values = tuple(fibers)
-    except TypeError:
-        return None
-    if len(values) != 3 or not all(np.ndim(value) for value in values):
-        return None
-    y, z, weights = (np.asarray(value, dtype=float).ravel() for value in values)
+        y, z, weights = (np.asarray(value, dtype=float) for value in fibers)
+    except (TypeError, ValueError) as error:
+        raise ValueError("fibers must be three arrays (y, z, weights)") from error
+    if any(values.ndim == 0 for values in (y, z, weights)):
+        raise ValueError("fibers must be three arrays (y, z, weights)")
+    y, z, weights = (values.ravel() for values in (y, z, weights))
     if not len(y) == len(z) == len(weights):
         raise ValueError("fibers must be three arrays (y, z, weights) of equal length")
     return y, z, weights
-
-
-def _fiber_counts(fibers, default, labels, minimum):
-    """Validated pair of fiber counts, e.g. ``(n_y, n_z)``."""
-    if fibers is None:
-        return default
-    try:
-        counts = tuple(fibers)
-    except TypeError:
-        counts = ()
-    if len(counts) != 2 or not all(
-        isinstance(count, (int, np.integer)) for count in counts
-    ):
-        raise ValueError(
-            f"fibers must be a pair of integers ({labels[0]}, {labels[1]}) or "
-            f"three arrays (y, z, weights), got {fibers!r}"
-        )
-    for count, label, lowest in zip(counts, labels, minimum):
-        if count < lowest:
-            raise ValueError(f"fibers: {label} must be at least {lowest}, got {count}")
-    return counts
-
-
-def _section_fibers(section, fibers):
-    """Fiber quadrature (y, z, weight) of a built-in section from its counts."""
-    kind = section.section_type
-    if kind == "rectangle":
-        n_y, n_z = _fiber_counts(fibers, (4, 4), ("n_y", "n_z"), (1, 1))
-        y, wy = _gauss_layers(-section.a / 2, section.a / 2, n_y)
-        z, wz = _gauss_layers(-section.b / 2, section.b / 2, n_z)
-        y, z = np.meshgrid(y, z, indexing="ij")
-        return y.ravel(), z.ravel(), np.outer(wy, wz).ravel()
-    if kind == "circle":
-        # fewer than three sectors leave a bending axis without stiffness
-        n_r, n_theta = _fiber_counts(fibers, (3, 16), ("n_r", "n_theta"), (1, 3))
-        return _polar_rule(0.0, section.r, n_r, n_theta)
-    if kind == "pipe":
-        n_r, n_theta = _fiber_counts(fibers, (2, 16), ("n_r", "n_theta"), (1, 3))
-        return _polar_rule(section.r_int, section.r_ext, n_r, n_theta)
-    raise ValueError(
-        f"No default fiber quadrature for a section of type {kind!r}: give "
-        "the fibers with fibers=(y, z, weights)"
-    )
 
 
 def _elastic_constants(material):
@@ -141,23 +77,14 @@ class BeamNonLinear(BeamProperties):
     section : BeamProperties
         Section geometry: ``BeamRectangular``, ``BeamCircular``, ``BeamPipe``
         or ``BeamMesh``, or a subclass that defines ``section_bounds`` and
-        takes explicit ``fibers``. A section given by its properties only
+        provides quadrature or accepts explicit ``fibers``. A section given by its properties only
         (``BeamProperties``) is refused. Its material is the fiber material
         unless ``material`` is given. Section dimensions must be uniform.
-    fibers : tuple, optional
-        Fibers of the section, in one of two forms.
-
-        * A pair of integers: the quadrature of a built-in section.
-          ``(n_y, n_z)`` layers of a rectangle, each with a two-point Gauss
-          rule (default ``(4, 4)``; even counts integrate the fully plastic
-          moment exactly); ``(n_r, n_theta)`` radial Gauss points and angular
-          sectors of a circle (default ``(3, 16)``) or a pipe (default
-          ``(2, 16)``), with at least three sectors.
-        * Three arrays ``(y, z, weights)``: the fibers themselves, in
-          physical centroid-relative coordinates, with their areas. Required
-          for a custom section other than ``BeamMesh``; their sums should
-          match ``A``, ``Iyy`` and ``Izz`` of the section, which is not checked.
-          If omitted for ``BeamMesh``, use the mesh quadrature.
+    fibers : tuple of arrays, optional
+        Explicit physical centroid-relative coordinates and area weights
+        ``(y, z, weights)``. By default, use ``section.fiber_quadrature()``.
+        To change the resolution, pass the result of calling that method
+        with the section's quadrature options.
     material : Mechanical3D or str, optional
         Fiber material, for instance ``fedoo.constitutivelaw.Simcoon``. It
         must support the ``"1Dstress"`` stress state and have uniform
@@ -189,9 +116,9 @@ class BeamNonLinear(BeamProperties):
         steel = fd.constitutivelaw.Simcoon(
             "EPICP", [210e3, 0.3, 0.0, 355.0, 500.0, 0.3]
         )
-        section = fd.constitutivelaw.BeamNonLinear(
-            fd.constitutivelaw.BeamRectangular(steel, 20.0, 10.0), fibers=(8, 4)
-        )
+        rectangle = fd.constitutivelaw.BeamRectangular(steel, 20.0, 10.0)
+        fibers = rectangle.fiber_quadrature(n_y=8, n_z=4)
+        section = fd.constitutivelaw.BeamNonLinear(rectangle, fibers=fibers)
         wf = fd.weakform.BeamEquilibrium(section, nlgeom=True)
     """
 
@@ -237,10 +164,9 @@ class BeamNonLinear(BeamProperties):
             setattr(self, attribute, getattr(section, attribute))
         self._n_points = section.n_points
 
-        if fibers is None and isinstance(section, BeamMesh):
-            y, z, weights = section.fibers
-        else:
-            y, z, weights = _explicit_fibers(fibers) or _section_fibers(section, fibers)
+        if fibers is None:
+            fibers = section.fiber_quadrature()
+        y, z, weights = _explicit_fibers(fibers)
         self._y, self._z, self._weights = y, z, weights
         self._output_points = np.column_stack(
             section.normalize_section_coordinates((y, z))

@@ -88,9 +88,10 @@ semantic versioning.
   including `consistent_tangent=True`. Saved `Stress` fields are the fiber
   stresses (`recovery="stored_only"`). A custom section that defines
   `section_bounds` is accepted with explicit `fibers`; a section given by
-  its properties only (`BeamProperties`) is refused. The single `fibers`
-  argument takes either the counts of the built-in quadrature, e.g.
-  `(n_y, n_z)`, or the fibers themselves as `(y, z, weights)`.
+  its properties only (`BeamProperties`) is refused. The `fibers` argument
+  takes explicit `(y, z, weights)` arrays. By default, the beam uses the
+  section's `fiber_quadrature()` method, which also accepts section-specific
+  resolution options for the built-in shapes.
 - `BeamMesh` computes the area and centroidal bending moments of inertia
   from a 2D section mesh, with optional principal-axis alignment through
   `rotate_mesh=True`. `BeamNonLinear` can use its Gauss points and weights as
