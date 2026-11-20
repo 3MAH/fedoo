@@ -87,6 +87,13 @@ semantic versioning.
 
 ### Changed
 
+- `Problem.apply_boundary_conditions` finds the free and eliminated dof with
+  boolean masks, and keeps the constraint matrix (the same object) while its
+  content does not change: the reduced system matrix and a reused
+  factorization are then kept as well. `Problem.solve` skips the product by
+  the prescribed values when they are all zero. Solving twice the same
+  system now gives exactly the same solution (it was refactorized before:
+  differences at round-off level, ~1e-15).
 - **`set_solver(symmetric=None)` is the default** (was `False`): with the
   direct solver of python-mumps, a symmetric-indefinite LDL^T factorization
   is used when every assembly of the problem is assembled with

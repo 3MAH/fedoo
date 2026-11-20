@@ -458,8 +458,8 @@ class Problem(ProblemBase):
             red is not None
             and np.array_equal(A.indptr, red["A_indptr"])
             and np.array_equal(A.indices, red["A_indices"])
-            # MatCB is rebuilt at each increment: compare its content
-            and _same_sparse(mat_cb, red["mat_cb"])
+            # the same object while the constraints do not change
+            and (mat_cb is red["mat_cb"] or _same_sparse(mat_cb, red["mat_cb"]))
         )
         if not same:
             self._reduction = {
@@ -551,9 +551,14 @@ class Problem(ProblemBase):
 
             if len(self._dof_free) != 0:
                 if np.isscalar(self.__D) and self.__D == 0:
-                    rhs = self._MatCB.T @ (self.__B - self.__A @ self._Xbc)
+                    rhs = self.__B
                 else:
-                    rhs = self._MatCB.T @ (self.__B + self.__D - self.__A @ self._Xbc)
+                    rhs = self.__B + self.__D
+                if np.ndim(rhs) == 0:  # B (and D) given as a scalar
+                    rhs = np.full(n_dof, rhs, dtype=float)
+                if np.any(self._Xbc):  # no product for homogeneous conditions
+                    rhs = rhs - self.__A @ self._Xbc
+                rhs = self._MatCB.T @ rhs
                 self.__X[self._dof_free] = self._solve_reduced(rhs)
 
                 self.__X = self._MatCB * self.__X[self._dof_free] + self._Xbc
@@ -715,8 +720,10 @@ class Problem(ProblemBase):
         F = np.zeros(n_dof)
 
         build_mpc = False
-        dof_blocked = set()  # only dirichlet bc dof
-        dof_slave = set()  # dirichlet + mpc elminated dof
+        # dof sets as boolean masks: only dirichlet bc dof, and dirichlet +
+        # mpc eliminated dof
+        is_blocked = np.zeros(n_dof, dtype=bool)
+        is_slave = np.zeros(n_dof, dtype=bool)
         data = []
         row = []
         col = []
@@ -731,7 +738,7 @@ class Problem(ProblemBase):
 
             if e.bc_type == "Dirichlet":
                 self._Xbc[e._dof_index] = e._current_value
-                dof_blocked.update(e._dof_index)
+                is_blocked[np.asarray(e._dof_index, dtype=int)] = True
 
             if e.bc_type == "Neumann":
                 # generalized forces from distinct bc are summed. A dof
@@ -745,7 +752,8 @@ class Problem(ProblemBase):
                 self._Xbc[e._dof_index[0]] = (
                     e._current_value
                 )  # valid in this case ??? need to be checked
-                dof_slave.update(e._dof_index[0])  # eliminated dof
+                # eliminated dof
+                is_slave[np.asarray(e._dof_index[0], dtype=int)] = True
                 build_mpc = True
 
                 n_fact = len(e._factors)  # only factor for non eliminated (master) dof
@@ -761,13 +769,14 @@ class Problem(ProblemBase):
         # DOFs that no element interpolates (mid-side pressure nodes of a
         # Taylor-Hood CombinedElement) have empty rows and columns: they are
         # blocked at 0, unless a boundary condition already eliminates them.
-        orphans = self._get_orphan_dofs().difference(dof_blocked, dof_slave)
-        dof_blocked.update(orphans)
+        orphans = self._get_orphan_dofs()
+        if orphans:
+            orphans = np.fromiter(orphans, int, len(orphans))
+            is_blocked[orphans[~is_slave[orphans]]] = True
 
-        dof_slave.update(dof_blocked)
-        dof_slave = np.fromiter(dof_slave, int, len(dof_slave))
-        # dof_slave= np.unique(np.hstack(dof_slave)).astype(int)
-        dof_free = np.setdiff1d(range(n_dof), dof_slave).astype(int)
+        is_slave |= is_blocked
+        dof_slave = np.flatnonzero(is_slave)
+        dof_free = np.flatnonzero(~is_slave)
 
         # build matrix MPC
         if build_mpc:
@@ -801,23 +810,31 @@ class Problem(ProblemBase):
             data = data[mask]
 
             self._MFext = M
-            self._dof_blocked = dof_blocked
+            self._dof_blocked = np.flatnonzero(is_blocked)
+
+            # adding identity for free nodes
+            col = np.hstack((col, np.arange(len(dof_free))))
+            row = np.hstack((row, dof_free))
+            data = np.hstack((data, np.ones(len(dof_free))))
+
+            mat_cb = sparse.coo_matrix(
+                (data, (row, col)), shape=(n_dof, len(dof_free))
+            ).tocsc()  # so that self._MatCB.T is csr
         else:
             self._MFext = None
+            # identity on the free dof: one entry per column (the csc matrix
+            # that the coo conversion would give)
+            mat_cb = sparse.csc_matrix(
+                (np.ones(len(dof_free)), dof_free, np.arange(len(dof_free) + 1)),
+                shape=(n_dof, len(dof_free)),
+            )
 
-        # adding identity for free nodes
-        col = np.hstack(
-            (col, np.arange(len(dof_free)))
-        )  # np.hstack((col,dof_free)) #col.append(dof_free)
-        row = np.hstack((row, dof_free))  # row.append(dof_free)
-        data = np.hstack(
-            (data, np.ones(len(dof_free)))
-        )  # data.append(np.ones(len(dof_free)))
-
-        mat_cb = sparse.coo_matrix(
-            (data, (row, col)), shape=(n_dof, len(dof_free))
-        ).tocsc()  # so that self._MatCB.T is csr
-        if self._factor_valid and not _same_sparse(self._MatCB, mat_cb):
+        previous = getattr(self, "_MatCB", None)
+        if previous is not None and _same_sparse(previous, mat_cb):
+            # same constraints: keep the object, so that what is cached on it
+            # (reduced system matrix, factorization) stays valid
+            mat_cb = previous
+        elif self._factor_valid:
             # a cached factorization (set_reuse_factorization) is that of
             # MatCB.T A MatCB: stale if the constraint matrix changed
             self.invalidate_factorization()
@@ -943,7 +960,7 @@ class Problem(ProblemBase):
         if self._MFext is not None and include_mpc:
             M = self._MFext
             # adding identity for all dof execpted slave dof in mpc
-            dof_idt = list(self._dof_free) + list(self._dof_blocked)
+            dof_idt = np.concatenate((self._dof_free, self._dof_blocked))
             col = np.hstack((M.col, dof_idt))
             row = np.hstack((M.row, dof_idt))
             data = np.hstack((M.data, np.ones(len(dof_idt))))
