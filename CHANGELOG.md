@@ -8,6 +8,11 @@ semantic versioning.
 
 ### Added
 
+- Optional numba kernels for the assembly (used when numba is installed, numpy
+  otherwise): fused element products, parallel sum into the global csr matrix,
+  operator times vector products, elementary operators computed in csr
+  order in updated lagrangian, and closed-form determinants and inverses of the
+  2x2 / 3x3 jacobians. numba is not a dependency: install it yourself.
 - Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
   (``tests/test_simcoon_integrator_options.py``): the closest point lands on the
   cutting-plane state, ``ncp="min"`` runs under both integrators, a law without a
@@ -106,6 +111,54 @@ semantic versioning.
 
 ### Changed
 
+- `Problem.apply_boundary_conditions` finds the free and eliminated dof with
+  boolean masks, and keeps the constraint matrix (the same object) while its
+  content does not change: the reduced system matrix and a reused
+  factorization are then kept as well. `Problem.solve` skips the product by
+  the prescribed values when they are all zero. Solving twice the same
+  system now gives exactly the same solution (it was refactorized before:
+  differences at round-off level, ~1e-15).
+- **`set_solver(symmetric=None)` is the default** (was `False`): with the
+  direct solver of python-mumps, a symmetric-indefinite LDL^T factorization
+  is used when every assembly of the problem is assembled with
+  `assume_sym=True`, and LU otherwise. The choice is made at each solve;
+  `symmetric=False` forces LU. Results change at round-off level.
+- PETSc (petsc4py, optional and installed by the user) is detected at import
+  and initialized at its first use, with the options of the command line. The
+  solver is kept across the solves of a problem and its matrix updated in
+  place; `reuse_preconditioner=True` keeps the preconditioner; GAMG gets the
+  rigid body modes as near null space (`near_null_space=True`); `rtol`, `atol`
+  and `max_it` options; `symmetric=True` uses a MUMPS Cholesky factorization.
+  With `-mpi_linear_solver_server` PETSc is initialized when fedoo is
+  imported, and the python-mumps contexts use `MPI_COMM_SELF` under mpiexec.
+- `get_config()["USE_MUMPS"]`; setting `get_config()["USE_PETSC"] = True` (and
+  the other solver switches) failed with a `KeyError`.
+- python-mumps: with an unchanged sparsity pattern the new values are written
+  in place into the arrays held by the MUMPS context (no coo conversion nor
+  triangle extraction).
+- Assembly: no product by a unit coefficient, Gauss weights applied once to a
+  coefficient shared by several terms, closed-form determinant and inverse of
+  the 2x2 and 3x3 jacobian matrices, and coo to csr conversion of the
+  elementary operators computed once per mesh (updated lagrangian).
+  Results may change at round-off level.
+- The matrix reduced by the boundary conditions keeps a fixed sparsity
+  pattern (explicit zeros kept) from the second solve on, and the python-mumps
+  context is kept across the solves of a problem: the analysis (ordering and
+  symbolic factorization) is reused while the pattern does not change.
+- python-mumps, on every platform: the number of threads is set by fedoo
+  (ICNTL(16), at most 8 and at most the performance cores) unless
+  `OMP_NUM_THREADS` is set. MUMPS gains little beyond 8 threads and loses a
+  lot on efficiency cores.
+- macOS: `KMP_BLOCKTIME=1` is set at import (unless already defined, and not
+  when pypardiso is installed). The default of LLVM's OpenMP runtime there
+  (passive wait) puts the threads to sleep between the many short parallel
+  regions of MUMPS, whose LDL^T factorization was about 2.8 times slower on
+  8 threads.
+- Rotations of the stresses, strains and tangent matrices of the constitutive
+  laws go through `simcoon.rotate_voigt` (one parallel loop instead of a scipy
+  `Rotation` built point by point), and the simcoon batch calls (`umat`,
+  `objective_rate`, `Lt_convert`, `rotate_voigt`) run on
+  `fedoo.get_config()["N_THREADS"]` threads (0, the default: all the cores).
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
@@ -258,6 +311,9 @@ semantic versioning.
 
 ### Fixed
 
+- `set_solver(..., symmetric=True)` with python-mumps 0.0.6, whose `Context`
+  has no `sym` argument, raised `NotImplementedError`: the symmetry is now
+  given with the matrix (`set_matrix(A, symmetric=True)`).
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
   spherical shell compression. Element expressions retain the original mesh's
@@ -380,6 +436,15 @@ semantic versioning.
   (with `nlgeom="UL"`).
 - Update links to gallery pages: example pages moved from numbered folders
   (`examples/01-simple/...`) to topical ones (`examples/basic/...`).
+
+### Planned improvements
+
+- **Pardiso** (pypardiso, Intel): none of the solver changes above was
+  measured with it. Keep the Pardiso solver across the Newton iterations and
+  redo only the numerical factorization (phase 22) while the sparsity pattern
+  does not change, as done for python-mumps; check the number of MKL threads
+  on hybrid Intel chips; measure LDL^T against LU before extending the
+  automatic symmetric factorization to Pardiso.
 
 ## [1.1.0] - 2026-10-14
 

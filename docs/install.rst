@@ -80,6 +80,11 @@ You can also install optional groups individually:
     $ pip install fedoo[ipc]         # IPC contact (ipctk)
     $ pip install fedoo[gui]         # pyvistaqt + pyside6
 
+`numba <https://numba.pydata.org/>`_ is optional and not installed by fedoo.
+When it is present (``pip install numba`` or ``conda install -c conda-forge
+numba``), the assembly uses compiled kernels instead of numpy, on the number
+of threads given by ``fedoo.get_config()["N_THREADS"]``.
+
 
 Sparse solvers
 --------------
@@ -99,7 +104,10 @@ this priority order: pypardiso → python-mumps → petsc4py:
 
     * `Petsc4Py <https://pypi.org/project/petsc4py/>`_
       mainly compatible with linux or macos including the MUMPS solver.
-      Use this if you need PETSc's iterative solvers or MPI parallelism.
+      Use this if you need PETSc's iterative solvers (e.g. conjugate
+      gradient with the GAMG algebraic multigrid for large 3D models) or
+      MPI parallelism. petsc4py is not a dependency of fedoo: install it
+      yourself (see :ref:`petsc-install`).
 
     * `Scikit-umfpack <https://scikit-umfpack.github.io/scikit-umfpack/>`_
       optional fallback to ``python-mumps``. Detected automatically if
@@ -122,6 +130,11 @@ To be able to launch the fedoo viewer, the module
 
         $ conda install -c conda-forge "libblas=*=*accelerate" python-mumps
 
+    fedoo runs MUMPS on at most 8 threads (performance cores only on Apple
+    chips) unless ``OMP_NUM_THREADS`` is set, and sets ``KMP_BLOCKTIME=1``
+    at import on macOS when pypardiso is absent. Define either variable before
+    importing fedoo to override.
+
     On Linux and Windows x86_64 (Intel or AMD), prefer the MKL variant,
     with pypardiso, which then shares the same MKL::
 
@@ -136,6 +149,56 @@ To be able to launch the fedoo viewer, the module
         $ python -c "import numpy; numpy.show_config()"
         $ otool -L $(python -c 'import numpy.linalg._umath_linalg as m; print(m.__file__)')   # macOS
         $ ldd  $(python -c 'import numpy.linalg._umath_linalg as m; print(m.__file__)')      # Linux
+
+
+.. _petsc-install:
+
+PETSc
+-----
+
+fedoo uses PETSc through petsc4py when it is installed, with
+``pb.set_solver('petsc', ...)``, or as direct solver if neither pypardiso
+nor python-mumps is installed (or with
+``fd.get_config()['USE_PETSC'] = True``). fedoo does not depend on it: it is
+detected at import and initialized at its first use.
+
+The simplest installation is with conda, in the environment of fedoo::
+
+    $ conda install -c conda-forge petsc4py
+
+conda-forge PETSc is built with MPI and MUMPS: the packages that depend on
+MPI-sensitive libraries are then installed in their MPI variant (``h5py``,
+``python-mumps``, which then shares the MUMPS library of PETSc). With pip,
+PETSc is built from sources (long, needs compilers and MPI)::
+
+    $ pip install mpi4py petsc petsc4py
+
+Large 3D mechanical models: conjugate gradient and GAMG, which fedoo gives
+the rigid body modes of the problem (near null space). With
+``reuse_preconditioner=True``, the multigrid hierarchy of the first matrix is
+kept for the next Newton iterations and increments::
+
+    pb.set_solver('petsc', solver_type='cg', pc_type='gamg', rtol=1e-8,
+                  reuse_preconditioner=True)
+
+The PETSc options can also be given on the command line of the script
+(``python script.py -ksp_type cg -pc_type gamg -ksp_converged_reason``) or in
+``petsc4py.PETSc.Options()`` before ``set_solver``. To solve on several MPI
+processes, use the PETSc linear solver server: the script runs on the first
+process, the others only take part in the solves::
+
+    $ mpiexec -n 4 python script.py -mpi_linear_solver_server \
+          -ksp_type cg -pc_type gamg -ksp_rtol 1e-8
+
+The solver of the server is then set by the command line options only (the
+parameters of ``set_solver`` are ignored, with a warning), and it does not
+get the rigid body modes: GAMG needs about ten times more iterations. For a
+3D elastic box of 105,000 dof, the serial GAMG with the rigid body modes
+(16 iterations) was faster than the server on 4 processes (192 iterations).
+
+On macOS, fedoo disables the shared memory of the server
+(``-mpi_linear_solver_server_use_shared_memory false``): the System V shared
+memory is limited to 4 MB by default.
 
 
 Simcoon

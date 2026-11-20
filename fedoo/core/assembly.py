@@ -3,10 +3,16 @@ from copy import copy
 import numpy as np
 from scipy import sparse
 
-from fedoo.core._sparsematrix import RowBlocMatrix
+from fedoo.core._sparsematrix import (
+    RowBlocMatrix,
+    _coo_to_csr,
+    _csr_matvec,
+    _csr_rmatvec,
+)
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
+from fedoo.core.diffop import _mul_coef
 from fedoo.core.mesh import Mesh
 from fedoo.core.weakform import WeakFormBase, _AssemblyOptions, WeakFormSum
 from fedoo.lib_elements.element_list import (
@@ -330,7 +336,9 @@ class Assembly(AssemblyBase):
                     if (
                         ii > 0 and same_op_as_next[ii - 1]
                     ):  # if same operator as previous with different coef, add the two coef
-                        coef_PG += wf.coef[ii]
+                        coef_PG = (
+                            coef_PG + wf.coef[ii]
+                        )  # not in place: coefs may be shared
                     else:
                         coef_PG = wf.coef[
                             ii
@@ -404,6 +412,7 @@ class Assembly(AssemblyBase):
                 sum_coef = (
                     False  # bool that indicate if operator are the same and can be sum
                 )
+                weighted_coefs = {}  # id(coef) -> (coef, coef * gauss weights)
 
                 if hasattr(self.weakform, "_list_mat_lumping"):
                     change_mat_lumping = (
@@ -439,11 +448,13 @@ class Assembly(AssemblyBase):
                         # if n_elm_gp == 0, coef_PG = nodal values (finite diffirences)
                         coef_PG = wf.coef[ii]
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii], n_elm_gp)
 
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     if sum_coef:  # if same operator as previous with different coef, add the two coef
-                        coef_PG_sum += coef_PG
+                        coef_PG_sum = (
+                            coef_PG_sum + coef_PG
+                        )  # not in place: coefs may be shared
                         sum_coef = False
                     else:
                         coef_PG_sum = coef_PG
@@ -459,9 +470,15 @@ class Assembly(AssemblyBase):
                             sum_coef = True
                             continue
 
-                    coef_PG = (
-                        coef_PG_sum * mat_gaussian_quadrature.data
-                    )  # mat_gaussian_quadrature.data is the diagonal of mat_gaussian_quadrature
+                    # an array coef shared by several terms (e.g. a tangent
+                    # component) is weighted once by the quadrature diagonal
+                    weighted = weighted_coefs.get(id(coef_PG_sum))
+                    if weighted is not None and weighted[0] is coef_PG_sum:
+                        coef_PG = weighted[1]
+                    else:
+                        coef_PG = coef_PG_sum * mat_gaussian_quadrature.data
+                        if not np.isscalar(coef_PG_sum):
+                            weighted_coefs[id(coef_PG_sum)] = (coef_PG_sum, coef_PG)
                     # check how it appens with change of variable and rotation dof
 
                     Matvir = self._get_elementary_operator(wf.op_vir[ii])
@@ -515,11 +532,9 @@ class Assembly(AssemblyBase):
                             VV = np.zeros(n_dof)
                         for i in range(len(Matvir)):
                             try:
-                                VV[sl[var_vir[i]]] = VV[sl[var_vir[i]]] - coef_vir[
-                                    i
-                                ] * Matvir[i].T * (
-                                    coef_PG
-                                )  # this line may be optimized
+                                VV[sl[var_vir[i]]] -= _mul_coef(
+                                    coef_vir[i], _csr_rmatvec(Matvir[i], coef_PG)
+                                )
                             except:
                                 pass
 
@@ -540,7 +555,7 @@ class Assembly(AssemblyBase):
                                     MM.addToBlocATB(
                                         Matvir[j],
                                         Mat[i],
-                                        (coef[i] * coef_vir[j]) * coef_PG,
+                                        _mul_coef(coef[i] * coef_vir[j], coef_PG),
                                         var_vir[j],
                                         var[i],
                                         mat_lumping,
@@ -552,7 +567,7 @@ class Assembly(AssemblyBase):
                                         listMatvir[j],
                                         Mat[i],
                                         [
-                                            (coef[i] * coef_vir[j]) * coef_PG
+                                            _mul_coef(coef[i] * coef_vir[j], coef_PG)
                                             for coef_PG in listCoef_PG
                                         ],
                                         var_vir[j],
@@ -639,7 +654,7 @@ class Assembly(AssemblyBase):
                     if np.isscalar(wf.coef[ii]):  # and self.op_vir[ii] != 1:
                         MM = MM + wf.coef[ii] * Matvir * mat_gaussian_quadrature * Mat
                     else:
-                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii][:], n_elm_gp)
+                        coef_PG = self.mesh.data_to_gausspoint(wf.coef[ii], n_elm_gp)
                         CoefMatrix = sparse.csr_matrix(
                             (
                                 mat_gaussian_quadrature.data * coef_PG,
@@ -1030,6 +1045,33 @@ class Assembly(AssemblyBase):
                     # transformation evaluated at the element center.
                     mesh._compute_gaussian_quadrature_mat(1, self._element_local_frame)
                     inv_jacobian_matrix = mesh._elm_interpolation[1].inv_jacobian_matrix
+                op_dd = self._elementary_operators_numba(
+                    elmRef,
+                    inv_jacobian_matrix,
+                    shape_functions,
+                    NbDoFperNode,
+                    n_interpol_nodes,
+                    n_elm_nodes,
+                    n_elm_gp,
+                    row,
+                    col,
+                    (n_elements * n_elm_gp, n_col),
+                    np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1,
+                )
+                if op_dd is not None:  # computed in csr order by a numba kernel
+                    data = {(0, 0): op_dd[0]}
+                    for i in range(len(op_dd) - 1):
+                        data[1, i] = op_dd[i + 1]
+                    Assembly._saved_elementary_operators[
+                        (
+                            mesh,
+                            elm_type.name,
+                            n_elm_gp,
+                            self._use_local_csys,
+                            mesh._local_frame_cache_key(self._element_local_frame),
+                        )
+                    ] = data
+                    continue
                 derivativePG = inv_jacobian_matrix @ elmRef.shape_function_derivative_gp
                 nb_dir_deriv = derivativePG.shape[-2]
             nop = (
@@ -1065,10 +1107,12 @@ class Assembly(AssemblyBase):
 
             op_dd = [
                 [
-                    sparse.coo_matrix(
-                        (data[i][j].reshape(-1), (row, col)),
-                        shape=(n_elements * n_elm_gp, n_col),
-                    ).tocsr()
+                    _coo_to_csr(
+                        data[i][j].reshape(-1),
+                        row,
+                        col,
+                        (n_elements * n_elm_gp, n_col),
+                    )
                     for j in range(NbDoFperNode)
                 ]
                 for i in range(nop)
@@ -1089,6 +1133,77 @@ class Assembly(AssemblyBase):
                     mesh._local_frame_cache_key(self._element_local_frame),
                 )
             ] = data
+
+    @staticmethod
+    def _elementary_operators_numba(
+        elmRef,
+        inv_jacobian_matrix,
+        shape_functions,
+        n_dof_per_node,
+        n_interpol_nodes,
+        n_elm_nodes,
+        n_elm_gp,
+        row,
+        col,
+        shape,
+        no_change_of_basis,
+    ):
+        """Elementary operators [N, d/dx_0, d/dx_1, ...] (one list item per
+        operator, each a list over the dof of a node) computed directly in
+        csr order by a numba kernel, for the common case: one interpolation,
+        one dof per node, all the element nodes interpolated, no change of
+        basis, coo indices without duplicate. None otherwise (or without
+        numba), and the general path is used."""
+        from fedoo.core._sparsematrix import (
+            _elementary_operator_values_numba,
+            _csr_pattern,
+            _csr_from_pattern,
+            _set_numba_threads,
+        )
+
+        if _elementary_operator_values_numba is None:
+            return None
+        if not (
+            no_change_of_basis
+            and n_dof_per_node == 1
+            and len(shape_functions) == 1
+            and n_interpol_nodes == n_elm_nodes
+            and not elmRef.use_center_jacobian
+        ):
+            return None
+        dshape = np.asarray(elmRef.shape_function_derivative_gp)
+        inv_jac = np.asarray(inv_jacobian_matrix)
+        if (
+            dshape.ndim != 3
+            or dshape.shape[0] != n_elm_gp
+            or dshape.shape[2] != n_elm_nodes
+            or inv_jac.ndim != 4
+            or inv_jac.shape[1] != n_elm_gp
+            or inv_jac.shape[3] != dshape.shape[1]
+        ):
+            return None
+        n_elm = inv_jac.shape[0]
+        sf = np.asarray(shape_functions[0])
+        if sf.shape[-1] != n_elm_nodes or sf.size % (n_elm_gp * n_elm_nodes):
+            return None
+        sf = sf.reshape(-1, n_elm_gp, n_elm_nodes)
+        if sf.shape[0] not in (1, n_elm) or len(row) != n_elm * n_elm_gp * n_elm_nodes:
+            return None
+        pattern = _csr_pattern(row, col, shape)
+        if not pattern.valid:
+            return None
+        out = np.empty((1 + inv_jac.shape[2], len(pattern.perm)))
+        _set_numba_threads()
+        _elementary_operator_values_numba(
+            np.ascontiguousarray(inv_jac, dtype=np.float64),
+            np.ascontiguousarray(dshape, dtype=np.float64),
+            np.ascontiguousarray(sf, dtype=np.float64),
+            pattern.perm,
+            n_elm_gp,
+            n_elm_nodes,
+            out,
+        )
+        return [[_csr_from_pattern(out[i], pattern)] for i in range(out.shape[0])]
 
     def _get_elementary_operator(self, deriv, n_elm_gp=None):
         # Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
@@ -1269,16 +1384,15 @@ class Assembly(AssemblyBase):
             else:
                 coef_PG = self.mesh.data_to_gausspoint(operator.coef[ii][:], n_elm_gp)
 
-            res += coef_PG * (
-                RowBlocMatrix(
-                    self._get_elementary_operator(operator.op[ii], n_elm_gp),
-                    nvar,
-                    var,
-                    coef,
-                    n_cols=len(U),
-                )
-                @ U
-            )
+            # RowBlocMatrix(ops, nvar, var, coef, n_cols=len(U)) @ U without the
+            # bloc matrix: each operator acts on the values of its variable
+            values = 0
+            for op, v, c in zip(
+                self._get_elementary_operator(operator.op[ii], n_elm_gp), var, coef
+            ):
+                n = op.shape[1]
+                values = values + _mul_coef(c, _csr_matvec(op, U[v * n : (v + 1) * n]))
+            res += _mul_coef(coef_PG, values)
 
         return res  # equivalent to self._get_assembled_operator(operator, n_elm_gp) @ U but more optimized
 

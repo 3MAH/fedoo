@@ -12,7 +12,7 @@ from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 import numpy as np
 import simcoon as sim
-from simcoon import Rotation as SimRotation
+from fedoo.core import _simcoon
 
 
 class StressEquilibrium(WeakFormBase):
@@ -663,7 +663,7 @@ class StressEquilibrium(WeakFormBase):
             # this configuration integrates.
             if assembly._nlgeom == "TL":
                 # material tangent dS/dE (DsigmaDe_2_DSDE)
-                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                assembly.sv["TangentMatrix"] = _simcoon.lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
                     assembly.sv["Stress"].asarray(),
@@ -681,13 +681,13 @@ class StressEquilibrium(WeakFormBase):
                 # modes). _convert_Lt_tag holds the corate-specific
                 # box -> dS/dE first stage (see the corate setter).
                 stress = assembly.sv["Stress"].asarray()
-                dsde = sim.Lt_convert(
+                dsde = _simcoon.lt_convert(
                     assembly.sv["TangentMatrix"],
                     assembly.sv["F"],
                     stress,
                     self._convert_Lt_tag,
                 )
-                assembly.sv["TangentMatrix"] = sim.Lt_convert(
+                assembly.sv["TangentMatrix"] = _simcoon.lt_convert(
                     dsde,
                     assembly.sv["F"],
                     stress,
@@ -707,11 +707,12 @@ class StressEquilibrium(WeakFormBase):
             if not (np.array_equal(assembly.sv["DispGradient"], 0)):
                 # True when the problem have been updated once
                 if "DStrain" in assembly.sv:
-                    rot = SimRotation.from_matrix(assembly.sv["DR"].transpose(2, 0, 1))
                     # rotate strain
                     assembly.sv["Strain"] = StrainTensorList(
-                        rot.apply_strain(
+                        _simcoon.rotate_voigt(
                             assembly.sv_start["Strain"].asarray(),
+                            assembly.sv["DR"],
+                            "strain",
                         )
                         + assembly.sv["DStrain"]
                     )
@@ -1280,7 +1281,7 @@ def _comp_linear_strain(wf, assembly, pb):
 
 def _comp_log_strain(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (D, DR, Omega) = sim.objective_rate(
+    (D, DR, Omega) = _simcoon.objective_rate(
         "log", assembly.sv_start["F"], F1, pb.dtime, False
     )
     assembly.sv["DR"] = DR
@@ -1289,7 +1290,7 @@ def _comp_log_strain(wf, assembly, pb):
 
 def _comp_log_strain_inc(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "log", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR
@@ -1298,7 +1299,7 @@ def _comp_log_strain_inc(wf, assembly, pb):
 
 def _comp_log_strain_R(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (D, DR, Omega) = sim.objective_rate(
+    (D, DR, Omega) = _simcoon.objective_rate(
         "log_R", assembly.sv_start["F"], F1, pb.dtime, False
     )
     assembly.sv["DR"] = DR
@@ -1307,7 +1308,7 @@ def _comp_log_strain_R(wf, assembly, pb):
 
 def _comp_log_strain_R_inc(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "log_R", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR
@@ -1329,7 +1330,7 @@ def _comp_log_strain_u(wf, assembly, pb):
 
 def _comp_jaumann_strain(wf, assembly, pb):
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "jaumann", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR
@@ -1339,7 +1340,7 @@ def _comp_jaumann_strain(wf, assembly, pb):
 def _comp_gn_strain(wf, assembly, pb):
     # green_naghdi corate
     F1 = assembly.sv["F"]
-    (DStrain, D, DR, Omega) = sim.objective_rate(
+    (DStrain, D, DR, Omega) = _simcoon.objective_rate(
         "green_naghdi", assembly.sv_start["F"], F1, pb.dtime, True
     )
     assembly.sv["DR"] = DR

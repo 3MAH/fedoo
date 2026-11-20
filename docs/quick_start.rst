@@ -108,9 +108,9 @@ The solver can be modified as follow:
     pb.set_solver('cg') #for conjugate gradient solver
 
 For direct solver, it is strongly recommended to install one of
-``pypardiso`` (Intel CPUs), ``python-mumps`` (cross-platform, also
-required for :meth:`Problem.set_reuse_factorization`) or ``petsc4py``
-for drastically improved computation performance. See
+``pypardiso`` (Intel CPUs), ``python-mumps`` (cross-platform) or
+``petsc4py`` (installed by the user, which also brings iterative solvers
+and MPI parallelism) for drastically improved computation performance. See
 :doc:`install` for the recommended commands per platform.
 
 Boundary conditions
