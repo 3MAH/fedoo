@@ -1,6 +1,7 @@
 """Mixed Stress Equilibrium weak form."""
 
 from fedoo.weakform._axi_utils import axi_hoop_strain_op, axi_radius
+from fedoo.weakform.stress_equilibrium import _tangent_op
 from fedoo.weakform.stress_equilibrium import (
     StressEquilibrium,
     _deformation_gradient,
@@ -176,13 +177,17 @@ class StressEquilibriumMixed(StressEquilibrium):
         # The implementation below is equivalent to:
         # delta_eps : (H_dev:eps + sigma_dev) + delta_eps_vol * P_total
 
+        tangent = _tangent_op(eps, H_dev) if assembly._nlgeom == "TL" else None
         sigma_wf = []
         for i in range(6):
             # Constant part (sigma_dev) + Linear part from Displacement (H_dev * eps)
-            val = (
-                sum([0 if eps[j] == 0 else eps[j] * H_dev[i][j] for j in range(6)])
-                + sigma_dev[i]
-            )
+            if tangent is None:
+                val = (
+                    sum([0 if eps[j] == 0 else eps[j] * H_dev[i][j] for j in range(6)])
+                    + sigma_dev[i]
+                )
+            else:  # the linear part is in tangent
+                val = sigma_dev[i]
             # Add Pressure part (Volumetric)
             if i < 3:
                 val = val - P_total
@@ -191,6 +196,8 @@ class StressEquilibriumMixed(StressEquilibrium):
         DiffOp = sum(
             [0 if eps[i] == 0 else eps[i].virtual * sigma_wf[i] for i in range(6)]
         )
+        if tangent is not None:
+            DiffOp = tangent + DiffOp
 
         # Add geometric stiffness if requested (same as standard StressEquilibrium)
         if self.geometric_stiffness and not (

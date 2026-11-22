@@ -4,6 +4,7 @@ import warnings
 
 from fedoo.core.weakform import WeakFormBase
 from fedoo.core.base import ConstitutiveLaw, InvalidKinematicStateError
+from fedoo.core.diffop import DiffOp as _DiffOp, _mul_coef
 from fedoo.core.time_evolution import SECOND_ORDER
 from fedoo.lib_elements.element_base import _evaluate_monomials, _monomial_exponents
 from fedoo.lib_elements.element_list import get_element
@@ -167,14 +168,18 @@ class StressEquilibrium(WeakFormBase):
                 assembly, eps, H, initial_stress, dilatation_correction
             )
 
-        sigma = [
-            sum([0 if eps[j] == 0 else eps[j] * H[i][j] for j in range(6)])
-            for i in range(6)
-        ]
+        DiffOp = None
+        if assembly._nlgeom == "TL":
+            DiffOp = _tangent_op(eps, H)
+        if DiffOp is None:
+            sigma = [
+                sum([0 if eps[j] == 0 else eps[j] * H[i][j] for j in range(6)])
+                for i in range(6)
+            ]
 
-        DiffOp = sum(
-            [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
-        )
+            DiffOp = sum(
+                [0 if eps[i] == 0 else eps[i].virtual * sigma[i] for i in range(6)]
+            )
 
         if not (np.isscalar(initial_stress) and initial_stress == 0):
             # this term doesnt seem to improve convergence in general !
@@ -1054,6 +1059,97 @@ def _element_projection(gp_field, weights, basis):
     mass = np.einsum("gi,ge,gj->eij", basis, weights, basis)
     rhs = np.einsum("gi,ge->ei", basis, weights * gp_field)
     return np.einsum("gi,ei->ge", basis, np.linalg.solve(mass, rhs[..., None])[..., 0])
+
+
+def _is_zero(value):
+    """Tell whether a coefficient is the scalar zero."""
+    return np.isscalar(value) and value == 0
+
+
+def _tangent_op(eps, H):
+    r"""Build the material tangent term with one term per couple of derivatives.
+
+    The term is :math:`\sum_{ij} \delta\varepsilon_i H_{ij} \varepsilon_j`.
+    Under the total Lagrangian formulation every strain component combines
+    several displacement derivatives, weighted by the displacement gradient,
+    and a derivative appears in several components: the term-by-term product
+    gives more than a thousand array products in 3D, most of them on couples
+    of derivatives that the assembly sums again. Here the coefficients are
+    gathered in a matrix :math:`B` (strain component, derivative) and the
+    coefficient of the couple of derivatives :math:`(a, b)` is
+    :math:`(B^T H B)_{ab}`. Only the summation order differs.
+
+    Parameters
+    ----------
+    eps : list of DiffOp
+        The 6 components of the strain operator (0 for a missing component).
+    H : array_like
+        Tangent matrix, ``H[i][j]`` a scalar or an array over the gauss points.
+
+    Returns
+    -------
+    DiffOp, int or None
+        The tangent operator, 0 if it has no term, or None when a component
+        of ``eps`` is not a plain sum of derivatives: the caller then expands
+        the products.
+    """
+    derivatives = []  # distinct derivatives of the strain operator
+    rows = []  # rows[i]: {derivative index: coefficient in eps[i]}
+    for op_eps in eps:
+        row = {}
+        if not _is_zero(op_eps):
+            for op, op_vir, coef in zip(op_eps.op, op_eps.op_vir, op_eps.coef):
+                if op == 1 or not (np.isscalar(op_vir) and op_vir == 1):
+                    return None
+                if op in derivatives:
+                    k = derivatives.index(op)
+                else:
+                    k = len(derivatives)
+                    derivatives.append(op)
+                row[k] = row[k] + coef if k in row else coef
+        rows.append(row)
+
+    # stress operator: S[i][b] = sum_j H_ij * B_jb
+    stress = [{} for i in range(6)]
+    for i in range(6):
+        for j, row in enumerate(rows):
+            if not row or _is_zero(H[i][j]):
+                continue
+            for b, coef in row.items():
+                _accumulate(stress[i], b, _mul_coef(H[i][j], coef))
+
+    # tangent: K_ab = sum_i B_ia * S_ib
+    op, op_vir, coefs = [], [], []
+    for a in range(len(derivatives)):
+        for b in range(len(derivatives)):
+            coef = {}
+            for i in range(6):
+                if a in rows[i] and b in stress[i]:
+                    _accumulate(coef, 0, _mul_coef(rows[i][a], stress[i][b][0]))
+            if coef and not _is_zero(coef[0][0]):
+                op.append(derivatives[b])
+                op_vir.append(derivatives[a])
+                coefs.append(coef[0][0])
+    if not op:
+        return 0
+    return _DiffOp(op, op_vir, coefs)
+
+
+def _accumulate(sums, key, value):
+    """Add a value to ``sums[key]``, stored as ``[sum, owned]``.
+
+    The sum is updated in place once it is an array created here: a value
+    may be shared with other operators (product by 1), and is never modified.
+    """
+    if key not in sums:
+        sums[key] = [value, False]
+        return
+    entry = sums[key]
+    if entry[1] and np.shape(value) == entry[0].shape:
+        entry[0] += value
+    else:
+        entry[0] = entry[0] + value
+        entry[1] = isinstance(entry[0], np.ndarray)
 
 
 # function to compute the displacement gradient

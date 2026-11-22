@@ -87,6 +87,20 @@ semantic versioning.
 
 ### Changed
 
+- **The total Lagrangian material tangent is contracted before the
+  assembly** (``StressEquilibrium`` and ``StressEquilibriumMixed`` with
+  ``nlgeom="TL"``). The strain operator is gathered in a matrix ``B`` (strain
+  component, displacement derivative) and the weak form holds one term per
+  couple of derivatives with the coefficient ``(B^T H B)_ab``, instead of the
+  1296 terms of the term-by-term product that the assembly summed again in 3D.
+  The residual is the same bit for bit; the tangent matrix changes at rounding
+  level (summation order), hence the converged fields too: on a neo-Hookean
+  box, same Newton iterations and at most 2e-14 relative on the stresses. Total
+  Lagrangian runs about 30 % faster on that case (one thread, Apple silicon
+  Mac). The F-bar total Lagrangian form and the poromechanics forms built on
+  ``StressEquilibrium`` benefit too; updated Lagrangian and small strain are
+  not concerned.
+
 - **Requires simcoon >= 2.6** (was 2.3). Finite strain kinematics and shell / beam
   rotations go through the simcoon 2.6 batch calls (`G_UdX_to_F`, `rotvec_to_matrix`,
   `matrix_to_rotvec`, `dexp_inv`) on `N_THREADS` threads: F and det F of every nlgeom formulation (standard, F-bar, mean
