@@ -106,6 +106,18 @@ semantic versioning.
 
 ### Changed
 
+- **The L2 gauss point to node conversion factorizes its mass matrix as
+  symmetric** (``convert_data`` and the recovery helpers with ``method="l2"``).
+  SuperLU orders the matrix on the pattern of ``A^T + A`` in symmetric mode
+  instead of the default COLAMD ordering, which fills in much less (first
+  conversion 35 s to 9 s on a 41^3 hex8 mesh, 2.2 s to 0.6 s on 26^3, measured
+  on one thread on an Apple silicon Mac), and all the components are solved
+  at once. The nodal values change at rounding level (1.4e-14 relative at
+  most on the meshes compared) when the quadrature makes the mass matrix
+  regular; with too few gauss points the matrix is rank deficient and the
+  values, already meaningless, differ. SuperLU is now always used, also when
+  scikit-umfpack is installed.
+
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
