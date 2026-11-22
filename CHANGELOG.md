@@ -106,6 +106,19 @@ semantic versioning.
 
 ### Changed
 
+- **Mesh generation, queries and node merging are vectorized**, with the same
+  results bit for bit. ``box_mesh``, ``rectangle_mesh`` and
+  ``structured_mesh_2D`` build their connectivity from index arrays (about 20
+  to 45 times faster on a 61^3 hex8 box or a 401^2 rectangle); ``merge_nodes``,
+  ``remove_nodes``, ``find_isolated_nodes`` and ``get_elements_from_nodes`` are
+  no longer quadratic in the number of nodes (about 20 to 70 times faster on a
+  41^3 mesh); ``extract_surface`` and ``extract_edges`` sort integer keys
+  instead of structured rows (about 4 times faster); ``init_interpolation``
+  writes its csr matrices directly (about 2.5 times faster); ``get_volume`` and
+  ``integrate_field`` no longer sum in Python; the SPR recovery no longer uses
+  ``np.add.at``; ``from_meshio`` stacks the blocks of an element type once.
+  Figures measured on one thread on an Apple silicon Mac.
+
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to

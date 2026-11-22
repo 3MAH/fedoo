@@ -10,6 +10,15 @@ import numpy as np
 
 # utility fuctions
 # Only Functions are declared here !!
+def _loop_indices(*values):
+    """Return the variables of nested loops, flattened in the loop order.
+
+    ``_loop_indices(a, b)`` gives the arrays of ``i`` and ``j`` visited by
+    ``for i in a: for j in b``: the first argument is the outer loop.
+    """
+    return [a.ravel() for a in np.meshgrid(*values, indexing="ij")]
+
+
 def stack(mesh1, mesh2, name=""):
     """
     Make the spatial stack of two mesh objects which have the same element shape.
@@ -86,7 +95,8 @@ def rectangle_mesh(
         )
         crd3 = np.c_[np.reshape(X, (-1, 1)), np.reshape(Y, (-1, 1))]
         crd = np.vstack((crd, crd2, crd3))
-        elm = [
+        j, i = _loop_indices(np.arange(0, ny - 1), np.arange(0, nx - 1))
+        elm = np.column_stack(
             [
                 nx * j + i,
                 nx * j + i + 1,
@@ -97,17 +107,15 @@ def rectangle_mesh(
                 nx * ny + (nx - 1) * (j + 1) + i,
                 nx * ny + (nx - 1) * ny + nx * j + i,
             ]
-            for j in range(0, ny - 1)
-            for i in range(0, nx - 1)
-        ]
+        )
     elif elm_type == "quad4":
-        elm = [
+        j, i = _loop_indices(np.arange(ny - 1), np.arange(nx - 1))
+        elm = np.column_stack(
             [nx * j + i, nx * j + i + 1, nx * (j + 1) + i + 1, nx * (j + 1) + i]
-            for j in range(ny - 1)
-            for i in range(nx - 1)
-        ]
+        )
     elif elm_type == "quad9":
-        elm = [
+        j, i = _loop_indices(np.arange(0, ny - 2, 2), np.arange(0, nx - 2, 2))
+        elm = np.column_stack(
             [
                 nx * j + i,
                 nx * j + i + 2,
@@ -119,46 +127,50 @@ def rectangle_mesh(
                 nx * (j + 1) + i,
                 nx * (j + 1) + i + 1,
             ]
-            for j in range(0, ny - 2, 2)
-            for i in range(0, nx - 2, 2)
-        ]
+        )
     elif elm_type == "tri3":
-        elm = []
-        for j in range(ny - 1):
-            elm += [
-                [nx * j + i, nx * j + i + 1, nx * (j + 1) + i] for i in range(nx - 1)
-            ]
-            elm += [
-                [nx * j + i + 1, nx * (j + 1) + i + 1, nx * (j + 1) + i]
-                for i in range(nx - 1)
-            ]
+        # for each row j: the nx - 1 lower triangles, then the upper ones
+        j, i = np.meshgrid(np.arange(ny - 1), np.arange(nx - 1), indexing="ij")
+        elm = np.stack(
+            [
+                np.stack([nx * j + i, nx * j + i + 1, nx * (j + 1) + i], axis=-1),
+                np.stack(
+                    [nx * j + i + 1, nx * (j + 1) + i + 1, nx * (j + 1) + i], axis=-1
+                ),
+            ],
+            axis=1,
+        ).reshape(-1, 3)
     elif elm_type == "tri6":
-        elm = []
-        for j in range(0, ny - 2, 2):
-            elm += [
-                [
-                    nx * j + i,
-                    nx * j + i + 2,
-                    nx * (j + 2) + i,
-                    nx * j + i + 1,
-                    nx * (j + 1) + i + 1,
-                    nx * (j + 1) + i,
-                ]
-                for i in range(0, nx - 2, 2)
-            ]
-            elm += [
-                [
-                    nx * j + i + 2,
-                    nx * (j + 2) + i + 2,
-                    nx * (j + 2) + i,
-                    nx * (j + 1) + i + 2,
-                    nx * (j + 2) + i + 1,
-                    nx * (j + 1) + i + 1,
-                ]
-                for i in range(0, nx - 2, 2)
-            ]
-
-    elm = np.array(elm)
+        j, i = np.meshgrid(
+            np.arange(0, ny - 2, 2), np.arange(0, nx - 2, 2), indexing="ij"
+        )
+        elm = np.stack(
+            [
+                np.stack(
+                    [
+                        nx * j + i,
+                        nx * j + i + 2,
+                        nx * (j + 2) + i,
+                        nx * j + i + 1,
+                        nx * (j + 1) + i + 1,
+                        nx * (j + 1) + i,
+                    ],
+                    axis=-1,
+                ),
+                np.stack(
+                    [
+                        nx * j + i + 2,
+                        nx * (j + 2) + i + 2,
+                        nx * (j + 2) + i,
+                        nx * (j + 1) + i + 2,
+                        nx * (j + 2) + i + 1,
+                        nx * (j + 1) + i + 1,
+                    ],
+                    axis=-1,
+                ),
+            ],
+            axis=1,
+        ).reshape(-1, 6)
 
     if elm_type != "quad8":
         N = len(crd)
@@ -556,7 +568,8 @@ def box_mesh(
 
         crd = np.vstack((crd, crd2, crd3, crd4))
 
-        elm = [
+        k, j, i = _loop_indices(np.arange(nz - 1), np.arange(ny - 1), np.arange(nx - 1))
+        elm = np.column_stack(
             [
                 nx * j + i + (k * nx * ny),
                 nx * j + i + 1 + (k * nx * ny),
@@ -607,10 +620,7 @@ def box_mesh(
                 nx * ny * nz + (nx - 1) * ny * nz + nx + nx * j + i + 1 + k * ny * nx,
                 nx * ny * nz + (nx - 1) * ny * nz + nx + nx * j + i + k * ny * nx,
             ]
-            for k in range(nz - 1)
-            for j in range(ny - 1)
-            for i in range(nx - 1)
-        ]
+        )
 
         bottom = (
             [nd for nd in range(ny * nx)]
@@ -771,7 +781,8 @@ def box_mesh(
         )
 
     elif elm_type == "hex8":
-        elm = [
+        k, j, i = _loop_indices(np.arange(nz - 1), np.arange(ny - 1), np.arange(nx - 1))
+        elm = np.column_stack(
             [
                 nx * j + i + (k * nx * ny),
                 nx * j + i + 1 + (k * nx * ny),
@@ -782,10 +793,7 @@ def box_mesh(
                 nx * (j + 1) + i + 1 + (k * nx * ny) + nx * ny,
                 nx * (j + 1) + i + (k * nx * ny) + nx * ny,
             ]
-            for k in range(nz - 1)
-            for j in range(ny - 1)
-            for i in range(nx - 1)
-        ]
+        )
 
         front = list(
             itertools.chain.from_iterable(
@@ -820,7 +828,6 @@ def box_mesh(
         raise NameError("Element not implemented. Only support hex8 and hex20 elements")
 
     N = np.shape(crd)[0]
-    elm = np.array(elm)
 
     node_sets = {
         "right": right,

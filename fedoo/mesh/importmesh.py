@@ -252,9 +252,7 @@ def import_msh(
 
                 # Tags = [cells[el][2:Nb_tag] for el in range(Nb_el)] #not used
                 # PhysicalEntity = np.array([cells[el][2] for el in range(Nb_el)]) #fist tag not used for now
-
-                Geom_all = np.array([cells[el][3] for el in range(Nb_el)], int)
-                list_geom = list(np.unique(Geom_all))
+                # Geometrical entities (cells[el][3]): not used for now
 
             elif version == "4.1":
                 l = msh.pop(0).split()
@@ -394,12 +392,6 @@ def import_msh(
                 type_elm == "hex20"
             ):  # change order to account for different numbering schemes
                 elm[:, 9:20] = elm[:, [11, 13, 9, 16, 18, 19, 17, 10, 12, 14, 15]]
-
-            GeometricalEntity = []
-            for geom in list_geom:
-                GeometricalEntity.append(
-                    [i for i in range(len(list_el)) if Geom_all[list_el[i]] == geom]
-                )
 
             if type_elm is None:
                 print(

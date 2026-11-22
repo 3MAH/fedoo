@@ -104,6 +104,81 @@ def _get_pyvista_cell_info(elm_type: str) -> tuple[int, int]:
     return cell_info
 
 
+def _sequential_sum(values):
+    """Sum the values along the first axis as the builtin ``sum`` does.
+
+    The values are added one by one from 0, in order, unlike ``numpy.sum``
+    which sums by pairs: the result is the one of ``sum(values)`` bit for bit.
+    """
+    values = np.asarray(values)
+    if len(values) == 0:
+        return 0
+    if values.dtype.kind != "f":
+        return sum(values)  # cumsum would promote the narrow integers
+    return 0 + np.cumsum(values, axis=0)[-1]
+
+
+def _gausspoint_node_matrices(elm_geom, n_nodes, gp2node, shape_function_gp, count):
+    """Build the gauss point to node and node to gauss point csr matrices.
+
+    The csr structure is written directly, with the nodes of each element
+    sorted: these are the canonical matrices (sorted indices) that the coo
+    conversion of :py:meth:`Mesh.init_interpolation` gives, without its sort.
+    The gauss point ``g`` of element ``e`` has index ``g * n_elements + e``.
+
+    Parameters
+    ----------
+    elm_geom : numpy.ndarray of int, shape (n_elements, n)
+        Geometrical nodes of the elements.
+    n_nodes : int
+        Number of nodes of the mesh.
+    gp2node : numpy.ndarray, shape (n, n_elm_gp)
+        Extrapolation matrix of one element, from its gauss points to its nodes.
+    shape_function_gp : numpy.ndarray, shape (n_elm_gp, n)
+        Shape functions of one element at its gauss points.
+    count : numpy.ndarray of int, shape (n_nodes,)
+        Number of elements attached to each node.
+
+    Returns
+    -------
+    tuple of scipy.sparse.csr_matrix, or None
+        ``(gausspoint to node, node to gausspoint)``. None when an element
+        repeats a node (the coo conversion sums the duplicates) or when a node
+        index is not in ``[0, n_nodes)`` (the coo conversion raises).
+    """
+    n_elements, n = elm_geom.shape
+    n_elm_gp = shape_function_gp.shape[0]
+    if shape_function_gp.shape != (n_elm_gp, n) or gp2node.shape != (n, n_elm_gp):
+        return None
+    if elm_geom.size and (elm_geom.min() < 0 or elm_geom.max() >= n_nodes):
+        return None  # invalid node indices: the coo conversion raises
+    perm = np.argsort(elm_geom, axis=1, kind="stable")
+    nodes = np.take_along_axis(elm_geom, perm, axis=1)
+    if n > 1 and np.any(nodes[:, 1:] == nodes[:, :-1]):
+        return None
+    # entries in csr order of the node -> gausspoint matrix: (g, e, sorted k)
+    nnz = n_elm_gp * n_elements * n
+    # index arrays given in the dtype that scipy chooses for them
+    idx_dtype = (
+        np.int32 if max(nnz, n_nodes, n_elm_gp * n_elements) < 2**31 else np.int64
+    )
+    indices = np.empty((n_elm_gp, n_elements, n), dtype=idx_dtype)
+    indices[:] = nodes
+    indices = indices.reshape(-1)
+    indptr = np.arange(0, nnz + 1, n, dtype=idx_dtype)
+    shape = (n_elm_gp * n_elements, n_nodes)
+    node2gp = sparse.csr_matrix(
+        (shape_function_gp[:, perm].reshape(-1), indices, indptr), shape=shape
+    )
+    # same divisions as the coo values: gp2node[k, g] / count[node k]
+    gp2node_values = gp2node.T[:, perm] / count[nodes]
+    # transposed structure: the csr conversion sorts the gauss points of a node
+    gp2node_mat = sparse.csr_matrix(
+        (gp2node_values.reshape(-1), indices, indptr), shape=shape
+    ).T.tocsr()
+    return gp2node_mat, node2gp
+
+
 class Mesh(MeshBase):
     """Fedoo Mesh object.
 
@@ -358,10 +433,13 @@ class Mesh(MeshBase):
             offset = type_count.get(elm_type, 0)
             block_meta.append((elm_type, offset))
             type_count[elm_type] = offset + len(data)
-            if elm_type in elements_dict:
-                elements_dict[elm_type] = np.vstack([elements_dict[elm_type], data])
-            else:
-                elements_dict[elm_type] = data
+            elements_dict.setdefault(elm_type, []).append(data)
+
+        # blocks of a same element type stacked once
+        elements_dict = {
+            elm_type: blocks[0] if len(blocks) == 1 else np.vstack(blocks)
+            for elm_type, blocks in elements_dict.items()
+        }
 
         if len(elements_dict) == 0:
             raise NotImplementedError("This mesh contains no compatible element.")
@@ -731,23 +809,34 @@ class Mesh(MeshBase):
 
         unique_nodes, ordre = np.unique(nds_del, return_index=True)
         assert len(unique_nodes) == len(nds_del), "A node can't be deleted 2 times"
-        # ordre = np.argsort(nds_del)
-        j = 0
+        # Chains of merged nodes: a kept node that is itself deleted is
+        # replaced by its own kept node, the deleted nodes in increasing order.
+        kept = nds_kept.tolist()
+        deleted = nds_del.tolist()
+        positions = {}
+        for i, nd in enumerate(kept):
+            positions.setdefault(nd, []).append(i)
+        for i in ordre.tolist():
+            nd = deleted[i]
+            if not 0 <= nd < n_nodes:
+                break  # deleted nodes are processed while they are node indices
+            rows = positions.pop(nd, None)
+            if rows is None:
+                continue
+            new_value = kept[i]
+            for r in rows:
+                kept[r] = new_value
+            positions.setdefault(new_value, []).extend(rows)
+        kept = np.asarray(kept)
+        changed = np.flatnonzero(kept != nds_kept)
+        if len(changed):
+            nds_kept[changed] = kept[changed]
+        # new numbering: rank of each node among the nodes not deleted
+        is_deleted = np.isin(np.arange(n_nodes), nds_del)
         new_num = np.zeros(n_nodes, dtype="int")
-        for nd in range(n_nodes):
-            if j < len(nds_del) and nd == nds_del[ordre[j]]:
-                # test if some nodes are equal to deleted node among the kept nodes. If required update the kept nodes values
-                deleted_nodes = np.where(
-                    nds_kept == nds_del[ordre[j]]
-                )[
-                    0
-                ]  # index of nodes to kept that are deleted and need to be updated to their new values
-                nds_kept[deleted_nodes] = nds_kept[ordre[j]]
-                j += 1
-            else:
-                new_num[nd] = nd - j
+        list_nd_new = np.flatnonzero(~is_deleted)
+        new_num[list_nd_new] = np.arange(len(list_nd_new))
         new_num[nds_del] = new_num[node_couples[:, 0]]
-        list_nd_new = [nd for nd in range(n_nodes) if not (nd in nds_del)]
         self.elements = new_num[self.elements]
         for key in self.node_sets:
             self.node_sets[key] = new_num[self.node_sets[key]]
@@ -768,7 +857,7 @@ class Mesh(MeshBase):
         nds_del = np.unique(index_nodes)
         n_nodes = self.n_nodes
 
-        list_nd_new = [nd for nd in range(n_nodes) if not (nd in nds_del)]
+        list_nd_new = np.flatnonzero(~np.isin(np.arange(n_nodes), nds_del))
         self.nodes = self.nodes[list_nd_new]
 
         new_num = np.zeros(n_nodes, dtype="int")
@@ -798,6 +887,17 @@ class Mesh(MeshBase):
         1D array containing the indexes of the non used nodes.
         If all elements are used, return an empty array.
         """
+        elements = np.asarray(self.elements)
+        if (
+            elements.dtype.kind in "iu"
+            and elements.size
+            and 0 <= elements.min()
+            and elements.max() < self.n_nodes
+        ):
+            # same as the set difference below, without sorting the elements
+            used = np.zeros(self.n_nodes, dtype=bool)
+            used[elements.ravel()] = True
+            return np.flatnonzero(~used)
         return np.setdiff1d(np.arange(self.n_nodes), np.unique(self.elements))
 
     def remove_isolated_nodes(self) -> int:
@@ -809,9 +909,7 @@ class Mesh(MeshBase):
         Returns : n_removed_nodes (int)
             the number of removed nodes.
         """
-        index_non_used_nodes = np.setdiff1d(
-            np.arange(self.n_nodes), np.unique(self.elements)
-        )
+        index_non_used_nodes = self.find_isolated_nodes()
         self.remove_nodes(index_non_used_nodes)
         self.reset_interpolation()
         return len(index_non_used_nodes)
@@ -844,7 +942,7 @@ class Mesh(MeshBase):
         Notes
         ------
 
-        * The new mesh keep the former element_sets dict with only the extrated elements.
+        * The element sets are not transferred to the new mesh.
         * The element indices of the new mesh are not the same as the former one.
         * The new mesh keep the initial ``nodes`` array (shared with the parent), so
           an assembly built on it stays in the parent DOF space and can be summed
@@ -857,13 +955,6 @@ class Mesh(MeshBase):
         """
         if isinstance(element_set, str):
             element_set = self.element_sets[element_set]
-
-        new_element_sets = {}
-
-        for key in self.element_sets:
-            new_element_sets[key] = np.array(
-                [el for el in self.element_sets[key] if el in element_set]
-            )
 
         sub_mesh = Mesh(
             self.nodes,
@@ -1140,20 +1231,14 @@ class Mesh(MeshBase):
         """
         if isinstance(node_set, str):
             node_set = self.node_sets[node_set]
-        node_set = set(node_set)
+        if not isinstance(node_set, np.ndarray):
+            node_set = list(node_set)
+        in_node_set = np.isin(self.elements, node_set)
 
         if all_nodes:
-            return [
-                i
-                for i, element in enumerate(self.elements)
-                if all([n in node_set for n in element])
-            ]
+            return np.flatnonzero(in_node_set.all(axis=1)).tolist()
         else:
-            return [
-                i
-                for i, element in enumerate(self.elements)
-                if any([n in node_set for n in element])
-            ]
+            return np.flatnonzero(in_node_set.any(axis=1)).tolist()
 
     def is_periodic(self, tol: float = 1e-8, dim: int | None = None) -> bool:
         """
@@ -1533,46 +1618,58 @@ class Mesh(MeshBase):
         # -------------------------------------------------------------------
         # Compute the array containing row and col indices used to assemble the sparse matrices
         # -------------------------------------------------------------------
-        row = np.empty((n_elements, n_elm_gp, n_elm_nd))
-        col = np.empty((n_elements, n_elm_gp, n_elm_nd))
+        row = np.empty((n_elements, n_elm_gp, n_elm_nd), dtype=int)
+        col = np.empty((n_elements, n_elm_gp, n_elm_nd), dtype=int)
         row[:] = (
             np.arange(n_elements).reshape((-1, 1, 1))
             + np.arange(n_elm_gp).reshape(1, -1, 1) * n_elements
         )
         col[:] = self.elements.reshape((n_elements, 1, n_elm_nd))
-        # row_geom/col_geom: row and col indices using only the dof used in the geometrical interpolation (col = col_geom if geometrical and variable interpolation are the same)
-        row_geom = np.reshape(row[..., :n_interpol_nodes], -1)
-        col_geom = np.reshape(col[..., :n_interpol_nodes], -1)
 
-        # -------------------------------------------------------------------
-        # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)
-        # -------------------------------------------------------------------
         PGtoNode = gausspoint_extrapolation_matrix(
             elm_interpol.xi_pg,
             getattr(elm_interpol, "xi_nd", None),
             elm_interpol.shape_function_gp,
         )  # shape = (n_interpol_nodes, n_elm_gp)
-        dataPGtoNode = PGtoNode.T.reshape(
-            (1, n_elm_gp, n_interpol_nodes)
-        ) / n_elm_with_nd[elm_geom].reshape(
-            (n_elements, 1, n_interpol_nodes)
-        )  # shape = (n_elements, n_elm_gp, n_elm_nd)
-        self._saved_gausspoint2node_mat[n_elm_gp] = sparse.coo_matrix(
-            (dataPGtoNode.reshape(-1), (col_geom, row_geom)),
-            shape=(n_nodes, n_elements * n_elm_gp),
-        ).tocsr()  # matrix to compute the node values from pg using the geometrical shape functions
+        shape_function_gp = np.asarray(elm_interpol.shape_function_gp)
 
-        # -------------------------------------------------------------------
-        # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)
-        # -------------------------------------------------------------------
-        dataNodeToPG = np.empty((n_elements, n_elm_gp, n_interpol_nodes))
-        dataNodeToPG[:] = elm_interpol.shape_function_gp.reshape(
-            (1, n_elm_gp, n_interpol_nodes)
+        # Direct csr build when the elements have distinct nodes: same
+        # matrices as the coo conversion below, without its sort.
+        matrices = _gausspoint_node_matrices(
+            elm_geom, n_nodes, PGtoNode, shape_function_gp, n_elm_with_nd
         )
-        self._saved_node2gausspoint_mat[n_elm_gp] = sparse.coo_matrix(
-            (np.reshape(dataNodeToPG, -1), (row_geom, col_geom)),
-            shape=(n_elements * n_elm_gp, n_nodes),
-        ).tocsr()  # matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
+        if matrices is not None:
+            (
+                self._saved_gausspoint2node_mat[n_elm_gp],
+                self._saved_node2gausspoint_mat[n_elm_gp],
+            ) = matrices
+        else:
+            # row_geom/col_geom: row and col indices using only the dof used in the geometrical interpolation (col = col_geom if geometrical and variable interpolation are the same)
+            row_geom = np.reshape(row[..., :n_interpol_nodes], -1)
+            col_geom = np.reshape(col[..., :n_interpol_nodes], -1)
+
+            # -------------------------------------------------------------------
+            # Assemble the matrix that compute the node values from pg based on the geometrical shape functions (no angular dof for ex)
+            # -------------------------------------------------------------------
+            dataPGtoNode = PGtoNode.T.reshape(
+                (1, n_elm_gp, n_interpol_nodes)
+            ) / n_elm_with_nd[elm_geom].reshape(
+                (n_elements, 1, n_interpol_nodes)
+            )  # shape = (n_elements, n_elm_gp, n_elm_nd)
+            self._saved_gausspoint2node_mat[n_elm_gp] = sparse.coo_matrix(
+                (dataPGtoNode.reshape(-1), (col_geom, row_geom)),
+                shape=(n_nodes, n_elements * n_elm_gp),
+            ).tocsr()  # matrix to compute the node values from pg using the geometrical shape functions
+
+            # -------------------------------------------------------------------
+            # Assemble the matrix that compute the pg values from nodes using the geometrical shape functions (no angular dof for ex)
+            # -------------------------------------------------------------------
+            dataNodeToPG = np.empty((n_elements, n_elm_gp, n_interpol_nodes))
+            dataNodeToPG[:] = shape_function_gp.reshape((1, n_elm_gp, n_interpol_nodes))
+            self._saved_node2gausspoint_mat[n_elm_gp] = sparse.coo_matrix(
+                (np.reshape(dataNodeToPG, -1), (row_geom, col_geom)),
+                shape=(n_elements * n_elm_gp, n_nodes),
+            ).tocsr()  # matrix to compute the pg values from nodes using the geometrical shape functions (no angular dof)
 
         # save some data related to interpolation for potentiel future use
         self._elm_interpolation[n_elm_gp] = elm_interpol
@@ -1704,12 +1801,49 @@ class Mesh(MeshBase):
         shifted_coordinates = (
             gp_coordinates[patch_gp_ids] - self.nodes[patch_node_ids, : self.ndim]
         )
-        patch_scale = np.zeros(self.n_nodes)
-        np.maximum.at(
-            patch_scale,
-            patch_node_ids,
-            np.linalg.norm(shifted_coordinates, axis=1),
+        # Sums over a patch as products by a csr matrix of ones: same order
+        # of additions as np.add.at, kept for the cases it handles differently.
+        valid_ids = (
+            len(patch_node_ids) > 0
+            and not np.iscomplexobj(data)
+            and patch_node_ids.min() >= 0
+            and patch_node_ids.max() < self.n_nodes
         )
+        if valid_ids:
+            patch_counts = np.bincount(patch_node_ids, minlength=self.n_nodes)
+            order = np.argsort(patch_node_ids, kind="stable")
+            indptr = np.zeros(self.n_nodes + 1, dtype=int)
+            np.cumsum(patch_counts, out=indptr[1:])
+            patch_matrix = sparse.csr_matrix(
+                (np.ones(len(order)), order, indptr),
+                shape=(self.n_nodes, len(order)),
+            )
+
+        def patch_sum_of(values):
+            if valid_ids:
+                return patch_matrix @ values.reshape(len(values), -1)
+            res = np.zeros((self.n_nodes,) + values.shape[1:])
+            np.add.at(res, patch_node_ids, values)
+            return res
+
+        patch_scale = np.zeros(self.n_nodes)
+        if not valid_ids:
+            np.maximum.at(
+                patch_scale,
+                patch_node_ids,
+                np.linalg.norm(shifted_coordinates, axis=1),
+            )
+            patch_counts = np.bincount(patch_node_ids, minlength=self.n_nodes)
+        has_patch = patch_counts > 0
+        if valid_ids and np.any(has_patch):
+            # max over each patch (as np.maximum.at from 0)
+            patch_scale[has_patch] = np.maximum(
+                patch_scale[has_patch],
+                np.maximum.reduceat(
+                    np.linalg.norm(shifted_coordinates, axis=1)[order],
+                    indptr[:-1][has_patch],
+                ),
+            )
         nonzero_scale = patch_scale[patch_node_ids] > 0
         shifted_coordinates[nonzero_scale] /= patch_scale[patch_node_ids][
             nonzero_scale
@@ -1720,27 +1854,21 @@ class Mesh(MeshBase):
         )
         n_terms = design_matrix.shape[1]
         n_components = data.shape[1]
-        normal_matrix = np.zeros((self.n_nodes, n_terms, n_terms))
-        rhs = np.zeros((self.n_nodes, n_terms, n_components))
-        np.add.at(
-            normal_matrix,
-            patch_node_ids,
-            design_matrix[:, :, None] * design_matrix[:, None, :],
-        )
-        np.add.at(
-            rhs,
-            patch_node_ids,
-            design_matrix[:, :, None] * data[patch_gp_ids, None, :],
-        )
+        normal_matrix = patch_sum_of(
+            design_matrix[:, :, None] * design_matrix[:, None, :]
+        ).reshape(self.n_nodes, n_terms, n_terms)
+        rhs = patch_sum_of(
+            design_matrix[:, :, None] * data[patch_gp_ids, None, :]
+        ).reshape(self.n_nodes, n_terms, n_components)
 
         node_data = (np.linalg.pinv(normal_matrix, rcond=1e-12) @ rhs)[:, 0, :]
-        patch_counts = np.bincount(patch_node_ids, minlength=self.n_nodes).reshape(
-            -1, 1
+        patch_counts = patch_counts.reshape(-1, 1)
+        patch_sum = (
+            patch_sum_of(data[patch_gp_ids])
+            .reshape(self.n_nodes, n_components)
+            .astype(node_data.dtype, copy=False)
         )
-        patch_sum = np.zeros((self.n_nodes, n_components), dtype=node_data.dtype)
-        np.add.at(patch_sum, patch_node_ids, data[patch_gp_ids])
         low_rank = np.linalg.matrix_rank(normal_matrix) < 2
-        has_patch = patch_counts[:, 0] > 0
         node_data[low_rank & has_patch] = (
             patch_sum[low_rank & has_patch] / patch_counts[low_rank & has_patch]
         )
@@ -1892,7 +2020,7 @@ class Mesh(MeshBase):
             else:
                 n_elm_gp = get_default_n_gp(self.elm_type)
 
-        return sum(
+        return _sequential_sum(
             self._get_gaussian_quadrature_mat(n_elm_gp)
             @ self.data_to_gausspoint(field, n_elm_gp).T
         )
@@ -1906,7 +2034,7 @@ class Mesh(MeshBase):
             Number of gauss points used on each element to compute the volume.
             If None, a default value is used depending on the element type.
         """
-        return sum(self._get_gaussian_quadrature_mat(n_elm_gp).data)
+        return _sequential_sum(self._get_gaussian_quadrature_mat(n_elm_gp).data)
 
     def get_element_volumes(self, n_elm_gp: int | None = None):
         """Compute the volume of each element (or surface for 2D meshes).
