@@ -106,6 +106,17 @@ semantic versioning.
 
 ### Changed
 
+- **The search of the penalty contact (``Contact``, ``SelfContact``) is
+  vectorized**, with the same contact pairs, gaps and tangent matrix bit for
+  bit. ``contact_search`` projects all the slave nodes on their candidate
+  elements at once; the nearest-node search (default of ``SelfContact``) uses a
+  kd-tree for the candidates and compares their exact distances; the bucket
+  search (default of ``Contact``) computes the distances by blocks; the
+  candidates of the ``ipctk`` search are filtered and grouped with arrays. On
+  the surface of a gyroid (19 588 slave nodes) one global search goes from
+  21.8 s to 0.21 s (nearest node) and from 11.5 s to 0.27 s (buckets), measured
+  on one thread on an Apple silicon Mac. The IPC contact is not concerned.
+
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
@@ -258,6 +269,14 @@ semantic versioning.
 
 ### Fixed
 
+- **The bucket search of the penalty contact read uninitialized memory.** The
+  nearest master node of a slave node without any master node in the
+  neighboring buckets, or lying in the last bucket (which the search skips, as
+  before), was left uninitialized (``np.empty``), and could match a
+  real node: a few spurious candidate elements, different from one run to the
+  other (13 184 contacts instead of 13 179 on a gyroid surface). These slave
+  nodes now have no candidate.
+
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
   spherical shell compression. Element expressions retain the original mesh's
@@ -380,6 +399,27 @@ semantic versioning.
   (with `nlgeom="UL"`).
 - Update links to gallery pages: example pages moved from numbered folders
   (`examples/01-simple/...`) to topical ones (`examples/basic/...`).
+
+### Planned improvements
+
+- **Penalty contact** (``Contact``, ``SelfContact``), defects kept as they
+  were by the vectorized search, to fix in a separate change since the
+  results will differ:
+  - the bucket search skips the last bucket of the sorted list, for the
+    master and the slave nodes (21 contacts found instead of 30 with the
+    nearest-node search on two stacked boxes; no contact with one bucket);
+  - on tri3 master faces, an element containing the projection is kept as
+    soon as one candidate of the same slave node is in the gap range, even
+    with a positive gap of its own (adhesive force on the slave node);
+  - the exclusion filter of ``SelfContact`` in the bucket search excludes
+    no element (the elements containing the slave node were meant).
+- **Penalty contact**, remaining loops in Python over the slave nodes
+  (``np.setdiff1d`` per node in the self contact, lists of candidate
+  elements built then flattened), and the sort of the connectivity done
+  again at each search although the connectivity does not change.
+- **Penalty contact**, the gains of the vectorized search were measured on
+  one machine only (Apple silicon, one thread): measure them again, on a
+  x86 machine and with the default number of threads.
 
 ## [1.1.0] - 2026-10-14
 
