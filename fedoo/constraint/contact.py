@@ -11,6 +11,178 @@ from fedoo.mesh import extract_surface as extract_surface_mesh
 from copy import copy
 
 
+def _ranges(starts, counts):
+    """Concatenate the integer ranges [starts[i], starts[i] + counts[i])."""
+    counts = np.asarray(counts, dtype=np.intp)
+    total = int(counts.sum())
+    if total == 0:
+        return np.zeros(0, dtype=np.intp)
+    offsets = np.cumsum(counts) - counts
+    return np.repeat(np.asarray(starts, dtype=np.intp) - offsets, counts) + np.arange(
+        total, dtype=np.intp
+    )
+
+
+def _elements_of_nodes(elements, nodes):
+    """Return, for each node, the sorted indices of the elements containing it.
+
+    Same result as ``(elements == nd).sum(axis=1).nonzero()[0]`` for each
+    node ``nd`` of ``nodes``, with a single sort of the connectivity instead
+    of a full scan per node.
+    """
+    n_per_elm = elements.shape[1]
+    sorted_elm = np.sort(elements, axis=1)
+    if (sorted_elm[:, 1:] == sorted_elm[:, :-1]).any():
+        # degenerated elements (repeated node): keep the scanning definition
+        return [(elements == nd).sum(axis=1).nonzero()[0] for nd in nodes]
+    flat = elements.ravel()
+    order = np.argsort(flat, kind="stable")
+    elm_ids = order // n_per_elm
+    ptr = np.searchsorted(flat[order], nodes, side="left")
+    end = np.searchsorted(flat[order], nodes, side="right")
+    return [elm_ids[ptr[i] : end[i]] for i in range(len(nodes))]
+
+
+def _bucket_nearest_master(
+    nodes,
+    bbox_min,
+    n_buckets,
+    w,
+    ndim,
+    master_nodes,
+    slave_nodes,
+    max_dist,
+    offsets,
+    self_contact,
+):
+    """Nearest master node of each slave node using a bucket sort.
+
+    Vectorized version of the historical per-bucket loop, with the same
+    results: same bucket definition, same neighbor-bucket order (that fixes
+    which node is selected between equidistant ones), same distance formula
+    as ``scipy.spatial.distance_matrix`` and the same exclusions (the last
+    bucket of the sorted list is not used and, for self contact, the slave
+    node itself is skipped).
+
+    Returns a float array: index of the nearest master node or -1.
+    """
+    nearest_neighbors = np.full(len(slave_nodes), -1.0)
+
+    def bucket_ids(crd):
+        bucket_id = crd[:, 0] + crd[:, 1] * n_buckets[0]
+        if ndim == 3:
+            bucket_id = bucket_id + crd[:, 2] * n_buckets[0] * n_buckets[1]
+        return bucket_id
+
+    def groups(bucket_id):
+        sorted_indices = bucket_id.argsort()
+        sorted_ids = bucket_id[sorted_indices]
+        starts = np.r_[0, np.flatnonzero(sorted_ids[1:] != sorted_ids[:-1]) + 1]
+        # the last group of the sorted list is not used (as historically)
+        return sorted_indices, sorted_ids[starts[:-1]], starts
+
+    # bucket sort of master nodes
+    m_sorted, m_keys, m_starts = groups(
+        bucket_ids(((nodes[master_nodes] - bbox_min) / w).astype(int))
+    )
+    # bucket sort of slave nodes
+    s_crd = ((nodes[slave_nodes] - bbox_min) / w).astype(int)
+    s_sorted, s_keys, s_starts = groups(bucket_ids(s_crd))
+    n_groups = len(s_keys)
+    if n_groups == 0 or len(m_keys) == 0:
+        return nearest_neighbors
+
+    # neighbor buckets of each slave bucket, in the historical order
+    # (last dimension outermost, first dimension innermost)
+    g_crd = s_crd[s_sorted[s_starts[:-1]]]  # crd of the first node of a bucket
+    off_side_m, off_side_p, off_inside = offsets
+    slot_off = np.empty((n_groups, ndim, 3), dtype=int)
+    slot_ok = np.ones((n_groups, ndim, 3), dtype=bool)
+    for dd in range(ndim):
+        is_min = g_crd[:, dd] == 0
+        is_max = (~is_min) & (g_crd[:, dd] == n_buckets[dd] - 1)
+        slot_off[:, dd, :] = off_inside
+        slot_off[is_min, dd, :2] = off_side_m
+        slot_off[is_max, dd, :2] = off_side_p
+        slot_ok[is_min | is_max, dd, 2] = False
+    stride = [1, n_buckets[0], n_buckets[0] * n_buckets[1]]
+    nb_id = []
+    nb_ok = []
+    for combo in np.ndindex(*(3,) * ndim):
+        # combo = (slot of last dim, ..., slot of first dim)
+        nid = s_keys.copy()
+        ok = np.ones(n_groups, dtype=bool)
+        for dd in range(ndim):
+            slot = combo[ndim - 1 - dd]
+            nid = nid + stride[dd] * slot_off[:, dd, slot]
+            ok &= slot_ok[:, dd, slot]
+        nb_id.append(nid)
+        nb_ok.append(ok)
+    nb_id = np.stack(nb_id, axis=1)  # (n_groups, 3**ndim)
+    nb_ok = np.stack(nb_ok, axis=1)
+
+    # locate the neighbor buckets among the master buckets
+    pos = np.searchsorted(m_keys, nb_id)
+    pos_c = np.minimum(pos, len(m_keys) - 1)
+    found = nb_ok & (m_keys[pos_c] == nb_id)
+    nb_start = m_starts[pos_c]
+    nb_count = np.where(found, m_starts[pos_c + 1] - nb_start, 0)
+
+    # neighbor master list of each bucket (concatenated, row-major order)
+    g_count = nb_count.sum(axis=1)  # number of neighbor masters per bucket
+    g_ptr = np.cumsum(g_count) - g_count
+    nb_master_pos = _ranges(nb_start.ravel(), nb_count.ravel())
+
+    # (slave, neighbor master) pairs, processed by blocks of slave nodes
+    s_count = np.diff(s_starts)  # number of slaves per bucket
+    slave_group = np.repeat(np.arange(n_groups), s_count)
+    slave_row = np.arange(len(slave_group)) - np.repeat(s_starts[:-1], s_count)
+    slave_idx = s_sorted[: len(slave_group)]
+    slave_count = g_count[slave_group]  # number of pairs of each slave
+    slave_ptr = np.cumsum(slave_count)
+    block_size = 2**20  # max number of pairs in a block
+    start = 0
+    while start < len(slave_group):
+        budget = slave_ptr[start] - slave_count[start] + block_size
+        stop = max(start + 1, int(np.searchsorted(slave_ptr, budget, "right")))
+        sl = slice(start, stop)
+        start = stop
+        pair_count = slave_count[sl]
+        if pair_count.sum() == 0:
+            continue
+        pair_col = _ranges(np.zeros(len(pair_count), dtype=np.intp), pair_count)
+        pair_slave = np.repeat(np.arange(len(pair_count)), pair_count)
+        pair_master = master_nodes[
+            m_sorted[
+                nb_master_pos[np.repeat(g_ptr[slave_group[sl]], pair_count) + pair_col]
+            ]
+        ]
+        x = nodes[slave_nodes[slave_idx[sl]]][pair_slave]
+        y = nodes[pair_master]
+        # same expression as scipy.spatial.distance_matrix (p=2)
+        dist = np.sum(np.abs(y.astype(float) - x.astype(float)) ** 2, axis=-1) ** (
+            1.0 / 2
+        )
+        if self_contact:
+            # the diagonal of each bucket block is the slave node itself
+            dist[pair_col == slave_row[sl][pair_slave]] = np.inf
+
+        # first nearest master of each slave (argmin semantics: first
+        # minimum, or first nan)
+        has_pair = pair_count > 0
+        seg_start = (np.cumsum(pair_count) - pair_count)[has_pair]
+        seg_min = np.minimum.reduceat(dist, seg_start)
+        rep_min = np.repeat(seg_min, pair_count[has_pair])
+        is_min = (dist == rep_min) | (np.isnan(rep_min) & np.isnan(dist))
+        pos_min = np.flatnonzero(is_min)
+        best = pos_min[np.searchsorted(pos_min, seg_start)]
+        min_dist = dist[best]
+        nearest_neighbors[slave_idx[sl][has_pair]] = -1 + (min_dist <= max_dist) * (
+            pair_master[best] + 1
+        )
+    return nearest_neighbors
+
+
 class Contact(AssemblyBase):
     """Contact Assembly based on a node 2 surface formulation"""
 
@@ -226,51 +398,59 @@ class Contact(AssemblyBase):
             broad_phase=self._ipctk.HashGrid(),
         )
 
-        elems = self._ipctk_compact_elements
-        cvid_to_slave = self._ipctk_cvid_to_slave
-        vid_to_orig = self._ipctk_vid_to_orig
-        is_self = isinstance(self, SelfContact)
-        result = [[] for _ in range(len(self.slave_nodes))]
-
         if self._ipctk_ndim == 2:
-            for c in cands.ev_candidates:
-                si = cvid_to_slave[c.vertex_id]
-                if si < 0:
-                    continue
-                if is_self and vid_to_orig[c.vertex_id] in elems[c.edge_id]:
-                    continue
-                result[si].append(c.edge_id)
+            pairs = [(c.vertex_id, c.edge_id) for c in cands.ev_candidates]
         else:
-            for c in cands.fv_candidates:
-                si = cvid_to_slave[c.vertex_id]
-                if si < 0:
-                    continue
-                if is_self and vid_to_orig[c.vertex_id] in elems[c.face_id]:
-                    continue
-                result[si].append(c.face_id)
+            pairs = [(c.vertex_id, c.face_id) for c in cands.fv_candidates]
 
+        result = [[] for _ in range(len(self.slave_nodes))]
+        if len(pairs) == 0:
+            return result
+        vertex_id, elm_id = np.array(pairs, dtype=np.intp).T
+        slave_id = self._ipctk_cvid_to_slave[vertex_id]
+        keep = slave_id >= 0
+        if isinstance(self, SelfContact):
+            # skip the elements that contain the slave node itself
+            keep &= ~(
+                self._ipctk_compact_elements[elm_id]
+                == self._ipctk_vid_to_orig[vertex_id][:, np.newaxis]
+            ).any(axis=1)
+        slave_id = slave_id[keep]
+        elm_id = elm_id[keep]
+        if len(slave_id) == 0:
+            return result
+
+        # group the candidates by slave node, keeping their order
+        order = np.argsort(slave_id, kind="stable")
+        slave_id = slave_id[order]
+        elm_id = elm_id[order].tolist()
+        bounds = np.flatnonzero(np.diff(slave_id)) + 1
+        starts = np.r_[0, bounds].tolist()
+        stops = np.r_[bounds, len(slave_id)].tolist()
+        for si, start, stop in zip(slave_id[starts].tolist(), starts, stops):
+            result[si] = elm_id[start:stop]
         return result
 
     def assemble_global_mat(self, compute="all"):
         pass
 
     def contact_search(self, contact_list={}, update_contact=True):
-        nodes = self.slave_nodes
+        nodes = np.asarray(self.slave_nodes)
         surf = self.mesh  # mesh of the surface
-        if update_contact:
-            # update contact connection
-            new_contact_list = {}
 
-        # look for contact
-        # brut force, compute the distance between nodes and all elements,
-        # no vectorization, not optimized
+        # All the slave nodes are processed at once, on stacks of small
+        # arrays: same kernel per item as a loop over the nodes.
 
         # get the normal surface on the center of the elements for each element on
         # the master sufrace
         elm_ref = get_element(surf.elm_type)(
             1
         )  # 1 gauss point to compute the local base (center of the element)
-        elm_nodes_crd = surf.nodes[surf.elements]
+        # plain ndarray views (avoid the overhead of array subclasses, such as
+        # pyvista arrays, in all the following operations)
+        crd = np.asarray(surf.nodes)
+        surf_elements = np.asarray(surf.elements)
+        elm_nodes_crd = crd[surf_elements]
 
         if surf.elm_type == "lin2":
             local_frame = elm_ref.get_local_frame(
@@ -292,317 +472,109 @@ class Contact(AssemblyBase):
             normals = np.cross(tangents[:, 0, :], tangents[:, 1, :])
             normals = normals / np.linalg.norm(normals, axis=1).reshape(-1, 1)
             dim = 2
-
-        indices = []
-        contact_elements = []
-        contact_g = []
+            length = None
 
         is_axi = self.space.is_axisymmetric
-        if is_axi:
-            contact_r = []  # radial coordinate for 2πr weighting
-
-        data_Ns = []
-        if dim == 1:
-            data_N0s = []
-            data_Ts = []
-            data_T0s = []
-        else:
-            data_N1 = []
-            data_N2 = []
-            data_T1 = []
-            data_T2 = []
 
         first_indices_disp = (
             np.array(self.space.get_rank_vector("Disp")).reshape(-1, 1) * surf.n_nodes
         )  # column vector with the first indice for each disp component
-        n_dof_contact = (surf.elements.shape[1] + 1) * len(
+        n_dof_contact = (surf_elements.shape[1] + 1) * len(
             first_indices_disp
         )  # number of dof involved in a contact point
 
         if update_contact:
-            list_possible_elements = self.global_search()
-
-        for i_nd, slave_node in enumerate(nodes):
-            # if self.no_slip and slave_node in contact_list:
-            #     el = contact_list.get(slave_node) #read the element in contact
-            #     #vec_xi remain the same. Contact isn't allowed to slip along the element:
-            #     vec_xi = self.contact_list_xi[slave_node]
-
-            #     #contact points in global coordinates
-            #     shape_func_val = elm_ref.shape_function(vec_xi)[0]
-            #     contact_point = (shape_func_val @ elm_nodes_crd[el])
-
-            #     #algebric distance from the possible elements
-            #     g = (surf.nodes[slave_node] - contact_point) @ normals[el]
-
-            #     if update_contact:
-            #         if (self.no_contact_loss or g<self.clearance):
-            #             new_contact_list[slave_node] = el
-
-            #         else: #contact_loss - slave_node no more in contact
-            #             del self.contact_list_xi[slave_node]
-            #             continue
-
-            #     # if g>self.clearance: g = self.clearance
-
-            #     n1 = normals[el]
-            #     a1 = tangents[el]
-
-            # elif update_contact:
-
-            if update_contact:
-                possible_elements = list_possible_elements[i_nd]
-
-                if not (len(possible_elements)):  # not(possible_elements):
-                    # no convenient nodes found (empty list)
-                    continue
-
-                # orthogonal projection on the element plane in node coordinates
-                if dim == 1:  # surf.elm_type = 'lin2'
-                    vec_xi = (
-                        1
-                        / length[possible_elements]
-                        * (
-                            (
-                                surf.nodes[slave_node]
-                                - elm_nodes_crd[possible_elements, 0, :]
-                            )
-                            * tangents[possible_elements]
-                        ).sum(axis=1)
-                    )
-                else:  # surf.elm_type == 'tri3':
-                    # work only for tri3 face
-                    vec_xi = np.linalg.solve(
-                        (
-                            tangents[possible_elements]
-                            @ tangents[possible_elements].transpose([0, 2, 1])
-                        ),
-                        np.sum(
-                            (
-                                (
-                                    surf.nodes[slave_node]
-                                    - elm_nodes_crd[possible_elements, 0, :]
-                                ).reshape(-1, 1, 3)
-                                * tangents[possible_elements]
-                            ),
-                            axis=2,
-                        )[..., np.newaxis],
-                    )
-
-                # contact points in global coordinates
-                shape_func_val = elm_ref.shape_function(vec_xi)
-                contact_points = (
-                    shape_func_val[:, np.newaxis, :] @ elm_nodes_crd[possible_elements]
-                ).squeeze()
-
-                # algebric distance from the possible elements
-                g = (
-                    (surf.nodes[slave_node] - contact_points)
-                    * normals[possible_elements]
-                ).sum(axis=1)
-
-                if self.max_penetration is None:
-                    if (g > self.clearance).all():
-                        continue
-                else:
-                    if np.logical_or(
-                        g > self.clearance, g < -self.max_penetration
-                    ).all():
-                        continue
-
-                # #element that may be in contact (ie vec_xi inside the element) and where g<0
-                # test = (vec_xi >= 0) * (vec_xi<=1) #id of elements where there may be contact
-                if dim == 1:  # surf.elm_type == 'lin2':
-                    test = (vec_xi + self.tol >= 0) * (
-                        vec_xi - self.tol <= 1
-                    )  # id of elements where there may be contact
-                else:  # surf.elm_type == 'tri3':
-                    test = (
-                        (vec_xi[:, 0] + self.tol >= 0)
-                        * (vec_xi[:, 1] + self.tol >= 0)
-                        * (1 - vec_xi[:, 0] - vec_xi[:, 1] + self.tol >= 0)
-                    )  # id of elements where there may be contact
-
-                # test = (vec_xi+self.tol >= 0) * (vec_xi-self.tol<=1) #id of elements where there may be contact
-                if self.max_penetration is None:
-                    test = np.where(test * (g < self.clearance))[0]
-                else:
-                    test = np.where(
-                        test * (g < self.clearance) * (g > -self.max_penetration)
-                    )[0]
-
-                # if len(test) == 0 and slave_node in contact_list:
-                #     # test = (vec_xi+self.tol/length[possible_elements] >= 0) * (vec_xi-self.tol/length[possible_elements]<=1) #id of elements where there may be contact
-                #     test = (vec_xi+self.tol >= 0) * (vec_xi-self.tol<=1) #id of elements where there may be contact
-                #     test = np.where(test*(g<self.clearance))[0]
-
-                if len(test) == 0:
-                    continue
-
-                if len(test) == 1:
-                    id_el = test[0]
-                else:  # len(test)==2
-                    # if slave_node in contact_list and contact_list[slave_node] in np.array(possible_elements)[test]:
-                    #     id_el = possible_elements.index(contact_list[slave_node])
-                    # else:
-                    #     #choose the nearest element
-                    # id_el = test[np.abs(g[test]).argmin()] #dont work with non zero clearance
-                    id_el = test[g[test].argmax()]
-
-                # id_el before selecting an id_el, we could also test if the the slave node is inside an element
-
-                # contact is established
-                g = g[id_el]
-                el = possible_elements[id_el]
-                vec_xi = vec_xi[id_el]
-                # if self.no_slip:
-                #     self.contact_list_xi[slave_node] = vec_xi
-                shape_func_val = shape_func_val[id_el]
-                new_contact_list[slave_node] = el
-
-            else:
-                el = contact_list.get(slave_node)  # read the element in contact
-                if el is None:
-                    continue
-
-                if dim == 1:  # surf.elm_type == 'lin2':
-                    vec_xi = (
-                        1
-                        / length[el]
-                        * (
-                            (surf.nodes[slave_node] - elm_nodes_crd[el, 0, :])
-                            * tangents[el]
-                        ).sum()
-                    )
-                else:  # surf.elm_type == 'tri3':
-                    # work only for tri3 face
-
-                    # need to be corrected
-                    vec_xi = np.linalg.solve(
-                        tangents[el] @ tangents[el].T,
-                        np.sum(
-                            (surf.nodes[slave_node] - elm_nodes_crd[el, 0, :]).reshape(
-                                1, 3
-                            )
-                            * tangents[el],
-                            axis=1,
-                        ),
-                    ).reshape(1, -1)
-
-                # contact points in global coordinates
-                shape_func_val = elm_ref.shape_function(vec_xi)[0]
-                contact_point = shape_func_val @ elm_nodes_crd[el]
-
-                # algebric distance from the possible elements
-                g = (surf.nodes[slave_node] - contact_point) @ normals[el]
-                # if g>self.clearance: g = self.clearance
-
-            n1 = normals[el]
-            a1 = tangents[el]
-
-            contact_g.append(g)
-            contact_elements.append(el)
-            if is_axi:
-                contact_r.append(surf.nodes[slave_node, 0])
-
-            # if vec_xi > 1:
-            #     shape_func_val = np.array([0.,1.])
-            # elif vec_xi < 0:
-            #     shape_func_val = np.array([1.,0.])
-
-            # Need to build several matrices
-            #   - matrix that compute g (algebric normal distance) from u knowing vec_xi (Ns in eq 9.18 p 239)
-            #   - matrix that
-
-            # col
-            # row
-            # n1 = normals[el]
-            # a1 = tangents[el]
-
-            contact_nodes = np.hstack(([slave_node], surf.elements[el]))
-            sorted_indices = contact_nodes.argsort()
-
-            indices.extend(
-                list((contact_nodes[sorted_indices] + first_indices_disp).ravel())
-            )
-
-            data_Ns.extend(
-                list(
-                    (
-                        np.hstack(([1], -shape_func_val))[sorted_indices]
-                        * n1.reshape(-1, 1)
-                    ).ravel()
+            # slave nodes (index in nodes) and element in contact
+            id_slave, contact_elements, contact_g, vec_xi, shape_func_val = (
+                self._select_contact_elements(
+                    nodes, crd, elm_ref, elm_nodes_crd, tangents, normals, length, dim
                 )
             )
+            new_contact_list = dict(zip(nodes[id_slave], contact_elements))
+        else:
+            id_slave = np.array(
+                [i for i, nd in enumerate(nodes) if contact_list.get(nd) is not None],
+                dtype=np.intp,
+            )
+            contact_elements = np.array(
+                [contact_list[nd] for nd in nodes[id_slave]], dtype=np.intp
+            )
+            slave_crd = crd[nodes[id_slave]]
+            if dim == 1:  # surf.elm_type == 'lin2':
+                vec_xi = (
+                    1
+                    / length[contact_elements]
+                    * (
+                        (slave_crd - elm_nodes_crd[contact_elements, 0, :])
+                        * tangents[contact_elements]
+                    ).sum(axis=1)
+                )
+            else:  # surf.elm_type == 'tri3':
+                # work only for tri3 face
+                # need to be corrected
+                tg = tangents[contact_elements]
+                vec_xi = np.linalg.solve(
+                    tg @ tg.transpose([0, 2, 1]),
+                    np.sum(
+                        (slave_crd - elm_nodes_crd[contact_elements, 0, :])[:, None, :]
+                        * tg,
+                        axis=2,
+                    )[..., np.newaxis],
+                )[..., 0]
 
-            if dim == 1:
-                data_Ts.extend(
-                    list(
-                        (
-                            np.hstack(([1], -shape_func_val))[sorted_indices]
-                            * a1.reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
-                data_N0s.extend(
-                    list(
-                        (
-                            np.array([0, -1, 1])[sorted_indices] * n1.reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
-                data_T0s.extend(
-                    list(
-                        (
-                            np.array([0, -1, 1])[sorted_indices] * a1.reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
-            else:
-                shape_func_deriv_val = elm_ref.shape_function_derivative(
-                    [vec_xi]
-                )[
-                    0
-                ]  # constant value for tri3, could be compute outside the loop for an arbitrary vec_xi
-                data_T1.extend(
-                    list(
-                        (
-                            np.hstack(([1], -shape_func_val))[sorted_indices]
-                            * (a1[0]).reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
-                data_T2.extend(
-                    list(
-                        (
-                            np.hstack(([1], -shape_func_val))[sorted_indices]
-                            * (a1[1]).reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
-                data_N1.extend(
-                    list(
-                        (
-                            np.hstack(([0], -shape_func_deriv_val[0]))[sorted_indices]
-                            * n1.reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
-                data_N2.extend(
-                    list(
-                        (
-                            np.hstack(([0], -shape_func_deriv_val[1]))[sorted_indices]
-                            * n1.reshape(-1, 1)
-                        ).ravel()
-                    )
-                )
+            # contact points in global coordinates
+            shape_func_val = elm_ref.shape_function(vec_xi)
+            contact_point = (
+                shape_func_val[:, np.newaxis, :] @ elm_nodes_crd[contact_elements]
+            )[:, 0, :]
 
-        if not (contact_elements):
+            # algebric distance from the possible elements
+            contact_g = (
+                (slave_crd - contact_point)[:, np.newaxis, :]
+                @ normals[contact_elements][:, :, np.newaxis]
+            )[:, 0, 0]
+
+        if len(contact_elements) == 0:
             self.global_matrix = sparse.csr_array(
                 (self.space.nvar * surf.n_nodes, self.space.nvar * surf.n_nodes)
             )
             self.global_vector = 0
             return {}  # empty contact_list
+
+        n1 = normals[contact_elements]
+        a1 = tangents[contact_elements]
+
+        # Need to build several matrices
+        #   - matrix that compute g (algebric normal distance) from u knowing vec_xi (Ns in eq 9.18 p 239)
+        contact_nodes = np.column_stack(
+            (nodes[id_slave], surf_elements[contact_elements])
+        )
+        sorted_indices = contact_nodes.argsort(axis=1)
+
+        indices = (
+            np.take_along_axis(contact_nodes, sorted_indices, axis=1)[:, np.newaxis, :]
+            + first_indices_disp
+        ).ravel()
+
+        def _sorted_data(coef, vec):
+            # (coef[sorted_indices] * vec.reshape(-1, 1)).ravel() for each contact
+            coef = np.take_along_axis(coef, sorted_indices, axis=1)
+            return (coef[:, np.newaxis, :] * vec[:, :, np.newaxis]).ravel()
+
+        coef_s = np.column_stack((np.ones(len(contact_elements)), -shape_func_val))
+        data_Ns = _sorted_data(coef_s, n1)
+        if dim == 1:
+            data_Ts = _sorted_data(coef_s, a1)
+            coef_0 = np.broadcast_to(np.array([0, -1, 1]), contact_nodes.shape)
+            data_N0s = _sorted_data(coef_0, n1)
+        else:
+            # constant value for tri3
+            shape_func_deriv_val = np.array(elm_ref.shape_function_derivative(vec_xi))
+            data_T1 = _sorted_data(coef_s, a1[:, 0])
+            data_T2 = _sorted_data(coef_s, a1[:, 1])
+            zeros = np.zeros((len(contact_elements), 1))
+            data_N1 = _sorted_data(np.hstack((zeros, -shape_func_deriv_val[:, 0])), n1)
+            data_N2 = _sorted_data(np.hstack((zeros, -shape_func_deriv_val[:, 1])), n1)
 
         shape = (len(contact_elements), self.space.nvar * surf.n_nodes)
         indptr = np.arange(0, len(indices) + 1, n_dof_contact)
@@ -611,14 +583,12 @@ class Contact(AssemblyBase):
         if dim == 1:
             N0s = sparse.csr_array((data_N0s, indices, indptr), shape=shape)
             Ts = sparse.csr_array((data_Ts, indices, indptr), shape=shape)
-            T0s = sparse.csr_array((data_Ns, indices, indptr), shape=shape)
         else:
             T1 = sparse.csr_array((data_T1, indices, indptr), shape=shape)
             T2 = sparse.csr_array((data_T2, indices, indptr), shape=shape)
             N1 = sparse.csr_array((data_N1, indices, indptr), shape=shape)
             N2 = sparse.csr_array((data_N2, indices, indptr), shape=shape)
 
-        contact_g = np.array(contact_g)
         # contact_g = contact_g* (contact_g< self.clearance) #remove negative value
         # if (contact_g > self.clearance).any():
         #     print('Warning, contact have been loosing')
@@ -627,7 +597,7 @@ class Contact(AssemblyBase):
 
         # Apply 2πr circumferential weighting for axisymmetric problems
         if is_axi:
-            axi_weight = 2 * np.pi * np.array(contact_r)
+            axi_weight = 2 * np.pi * crd[nodes[id_slave], 0]
             Fcontact = Fcontact * axi_weight
             if np.isscalar(eps):
                 eps = eps * axi_weight
@@ -787,6 +757,117 @@ class Contact(AssemblyBase):
 
         # voir eq 9.35 et 9.36 (page 241 du pdf) avec def 9.18 et 9.19 page 239
 
+    def _select_contact_elements(
+        self, nodes, crd, elm_ref, elm_nodes_crd, tangents, normals, length, dim
+    ):
+        """Search the master element in contact with each slave node.
+
+        Each slave node is projected on all its candidate elements given by
+        :py:meth:`global_search` (all slave nodes at once). For each slave
+        node, the selected element is the admissible candidate with the
+        largest algebraic gap (first one in case of equality).
+
+        Returns
+        -------
+        id_slave, elements, gaps, vec_xi, shape_func_val: numpy arrays
+            Index (in ``nodes``) of the slave nodes in contact, and the
+            element, gap, local coordinates and shape function values of
+            the associated contact points.
+        """
+        list_possible_elements = self.global_search()
+        n_candidates = np.fromiter(
+            (len(pe) for pe in list_possible_elements),
+            dtype=np.intp,
+            count=len(list_possible_elements),
+        )
+        if n_candidates.sum() == 0:
+            empty = np.zeros(0, dtype=np.intp)
+            return empty, empty, np.zeros(0), None, None
+
+        # (slave node, candidate element) pairs, in the slave node order
+        pair_slave = np.repeat(np.arange(len(n_candidates)), n_candidates)
+        pair_el = np.concatenate(
+            [np.asarray(pe, dtype=np.intp) for pe in list_possible_elements if len(pe)]
+        )
+        slave_crd = crd[nodes[pair_slave]]
+
+        # orthogonal projection on the element plane in node coordinates
+        if dim == 1:  # surf.elm_type = 'lin2'
+            vec_xi = (
+                1
+                / length[pair_el]
+                * ((slave_crd - elm_nodes_crd[pair_el, 0, :]) * tangents[pair_el]).sum(
+                    axis=1
+                )
+            )
+        else:  # surf.elm_type == 'tri3':
+            # work only for tri3 face
+            vec_xi = np.linalg.solve(
+                (tangents[pair_el] @ tangents[pair_el].transpose([0, 2, 1])),
+                np.sum(
+                    (
+                        (slave_crd - elm_nodes_crd[pair_el, 0, :]).reshape(-1, 1, 3)
+                        * tangents[pair_el]
+                    ),
+                    axis=2,
+                )[..., np.newaxis],
+            )
+
+        # contact points in global coordinates
+        shape_func_val = elm_ref.shape_function(vec_xi)
+        contact_points = (shape_func_val[:, np.newaxis, :] @ elm_nodes_crd[pair_el])[
+            :, 0, :
+        ]
+
+        # algebric distance from the possible elements
+        g = ((slave_crd - contact_points) * normals[pair_el]).sum(axis=1)
+
+        # element that may be in contact (ie vec_xi inside the element)
+        tol = self.tol
+        if dim == 1:  # surf.elm_type == 'lin2':
+            inside = (vec_xi + tol >= 0) * (vec_xi - tol <= 1)
+        else:  # surf.elm_type == 'tri3':
+            inside = (
+                (vec_xi[:, 0] + tol >= 0)
+                * (vec_xi[:, 1] + tol >= 0)
+                * (1 - vec_xi[:, 0] - vec_xi[:, 1] + tol >= 0)
+            )[:, 0]
+
+        if self.max_penetration is None:
+            in_gap = g < self.clearance
+        else:
+            in_gap = (g < self.clearance) * (g > -self.max_penetration)
+
+        if dim == 1:
+            admissible = inside & in_gap
+        else:
+            # tri3: an element containing the projection is admissible as
+            # soon as one candidate of the same slave node is in the gap range.
+            has_candidates = n_candidates > 0
+            starts = (np.cumsum(n_candidates) - n_candidates)[has_candidates]
+            any_in_gap = np.zeros(len(n_candidates), dtype=bool)
+            any_in_gap[has_candidates] = np.logical_or.reduceat(in_gap, starts)
+            admissible = inside & any_in_gap[pair_slave]
+
+        # for each slave node: first admissible candidate with the largest gap
+        # (argmax semantics, nan being the largest value)
+        cand = np.flatnonzero(admissible)
+        g_cand = g[cand]
+        is_nan = np.isnan(g_cand)
+        cand = cand[np.lexsort((cand, -g_cand, ~is_nan, pair_slave[cand]))]
+        slave_cand = pair_slave[cand]
+        best = (
+            cand[np.r_[True, slave_cand[1:] != slave_cand[:-1]]] if len(cand) else cand
+        )
+
+        return (
+            pair_slave[best],
+            pair_el[best],
+            g[best],
+            vec_xi[best],
+            shape_func_val[best],
+        )
+
     def set_disp(self, disp):
         if np.isscalar(disp) and disp == 0:
             self.current = self
@@ -864,142 +945,118 @@ class Contact(AssemblyBase):
         return Fcontact, self.eps_n
 
     def _nearest_node_bucket_sort(self):
-        ndim = self.space.ndim
+        """Find a list of elements that may be in contact for all slave nodes.
+
+        Same as :py:meth:`_nearest_node`, but the nearest master node of a
+        slave node is only searched in the neighbor buckets of a regular
+        grid (bucket size given by the ``bucket_size`` attribute).
+        """
         mesh = self.mesh
-        master_nodes = self.master_nodes
-        slave_nodes = self.slave_nodes
-        max_dist = self.max_dist
-
+        bounding_box = mesh.bounding_box
         w = self.bucket_size
-        n_buckets = (mesh.bounding_box.size // w).astype(
-            int
-        )  # n of buckets along each direction
+        nearest_neighbors = _bucket_nearest_master(
+            np.asarray(mesh.nodes),
+            bounding_box[0],
+            (bounding_box.size // w).astype(int),  # n of buckets along each direction
+            w,
+            self.space.ndim,
+            self.master_nodes,
+            np.asarray(self.slave_nodes),
+            self.max_dist,
+            (np.array([0, 1]), np.array([-1, 0]), np.array([-1, 0, 1])),
+            self_contact=False,
+        )
+        return self._elements_of_nearest_nodes(nearest_neighbors)
 
-        # bucket_sort master_nodes
-        bucket_crd = ((mesh.nodes[master_nodes] - mesh.bounding_box[0]) / w).astype(
-            int
-        )  # bucket coordinates (ie nth bucket in each direction) for master nodes
-        if ndim == 2:
-            bucket_id = bucket_crd[:, 0] + bucket_crd[:, 1] * n_buckets[0]
-        else:  # ndim == 3
-            bucket_id = (
-                bucket_crd[:, 0]
-                + bucket_crd[:, 1] * n_buckets[0]
-                + bucket_crd[:, 2] * n_buckets[0] * n_buckets[1]
-            )
+    def _elements_of_nearest_nodes(self, nearest_neighbors):
+        """Elements containing the nearest master node of each slave node.
 
-        sorted_indices = bucket_id.argsort()
+        ``nearest_neighbors[i]`` is the nearest master node of the ith slave
+        node, or -1 if no master node is close enough (empty list).
+        """
+        found = np.flatnonzero(nearest_neighbors != -1)
+        possible_elements = [[] for _ in range(len(nearest_neighbors))]
+        for i, elm in zip(
+            found,
+            _elements_of_nodes(
+                np.asarray(self.mesh.elements), nearest_neighbors[found].astype(int)
+            ),
+        ):
+            possible_elements[i] = elm
+        return possible_elements
 
-        temp = [0] + [
-            i
-            for i in range(1, len(bucket_id))
-            if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i - 1]]
-        ]
-        bucket_master = {
-            bucket_id[sorted_indices[temp[i]]]: master_nodes[
-                sorted_indices[temp[i] : temp[i + 1]]
-            ]
-            for i in range(0, len(temp) - 1)
-        }  # bucket[i] contain the master nodes in the ith bucket
+    def _nearest_master_nodes(self, exclude_self=False):
+        """Nearest master node of all slave nodes.
 
-        # bucket_sort slave_nodes
-        bucket_crd = ((mesh.nodes[slave_nodes] - mesh.bounding_box[0]) / w).astype(
-            int
-        )  # bucket coordinates (ie nth bucket in each direction) for slave nodes
-        if ndim == 2:
-            bucket_id = bucket_crd[:, 0] + bucket_crd[:, 1] * n_buckets[0]
-        else:  # ndim == 3
-            bucket_id = (
-                bucket_crd[:, 0]
-                + bucket_crd[:, 1] * n_buckets[0]
-                + bucket_crd[:, 2] * n_buckets[0] * n_buckets[1]
-            )
+        Returns the index (in ``master_nodes``) of the nearest master node
+        and the corresponding distance for each slave node. The result is
+        the one of a brute force search: ``argmin`` of
+        ``np.linalg.norm(slave - masters, axis=1)``, ie same distance values
+        and lowest index among equidistant nodes. A kd-tree gives a few
+        candidate master nodes, that contain all the nodes whose distance
+        may be the minimum, and the exact distances of the candidates are
+        compared. If ``exclude_self`` is True, the ith master node is ignored
+        for the ith slave node (self contact, where both lists are the same).
+        """
+        crd = np.asarray(self.mesh.nodes)
+        slave_crd = crd[np.asarray(self.slave_nodes, dtype=np.intp)]
+        master_crd = crd[self.master_nodes]
+        n_slave = len(slave_crd)
+        n_master = len(master_crd)
+        trial_node_indice = np.empty(n_slave, dtype=np.intp)
+        min_dist = np.empty(n_slave)
 
-        sorted_indices = bucket_id.argsort()
+        # The kd-tree needs finite coordinates, and its tie margin is the one
+        # of float64 distances: brute force for all the slave nodes otherwise.
+        use_tree = (
+            crd.dtype == np.float64
+            and n_slave > 0
+            and np.isfinite(slave_crd).all()
+            and np.isfinite(master_crd).all()
+        )
+        if use_tree:
+            k = min(n_master, 8 + int(exclude_self))
+            kd_dist, cand = spatial.cKDTree(master_crd).query(slave_crd, k=k)
+            kd_dist = kd_dist.reshape(n_slave, k)
+            cand = cand.reshape(n_slave, k)
+            if exclude_self:
+                is_self = cand == np.arange(n_slave)[:, np.newaxis]
+                d_ref = np.where(is_self, np.inf, kd_dist).min(axis=1)
+            else:
+                d_ref = kd_dist[:, 0]
+            # Slaves whose kth candidate is as close as the nearest one may
+            # have other equidistant master nodes: brute force for these.
+            complete = (kd_dist[:, -1] > d_ref * (1 + 1e-8)) | (k == n_master)
+        else:
+            cand = np.zeros((n_slave, 1), dtype=np.intp)
+            is_self = np.zeros((n_slave, 1), dtype=bool)
+            complete = np.zeros(n_slave, dtype=bool)
 
-        temp = [0] + [
-            i
-            for i in range(1, len(bucket_id))
-            if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i - 1]]
-        ]
+        rows = np.flatnonzero(complete)
+        dist = np.linalg.norm(
+            slave_crd[rows, np.newaxis, :] - master_crd[cand[rows]], axis=2
+        )
+        if exclude_self:
+            dist[is_self[rows]] = np.inf
+        min_dist[rows] = dist.min(axis=1)
+        trial_node_indice[rows] = np.where(
+            dist == min_dist[rows, np.newaxis], cand[rows], n_master
+        ).min(axis=1)
 
-        bucket_crd = {
-            bucket_id[sorted_indices[temp[i]]]: bucket_crd[sorted_indices[temp[i]]]
-            for i in range(0, len(temp) - 1)
-        }  # store the bucket crd for each bucket id
-        bucket = {
-            bucket_id[sorted_indices[temp[i]]]: sorted_indices[temp[i] : temp[i + 1]]
-            for i in range(0, len(temp) - 1)
-        }  # contain the slave_nodes index for the ith bucket. Use self.slave_nodes[bucket_id] to retrive the corresponding node indices
-
-        # build dict that contains all neighbors buckets
-        side_m = np.array([0, 1])
-        side_p = np.array([-1, 0])
-        inside = np.array([-1, 0, 1])
-        array_neighbors = {
-            i: [
-                side_m
-                if bucket_crd[i][dd] == 0
-                else side_p
-                if bucket_crd[i][dd] == n_buckets[dd] - 1
-                else inside
-                for dd in range(ndim)
-            ]
-            for i in bucket
-        }
-
-        if ndim == 2:
-            neighbors_buckets = {
-                i: (
-                    i
-                    + array_neighbors[i][0]
-                    + n_buckets[0] * array_neighbors[i][1].reshape(-1, 1)
-                ).flatten()
-                for i in bucket
-            }
-        else:  # ndim == 3:
-            neighbors_buckets = {
-                i: (
-                    i
-                    + array_neighbors[i][0]
-                    + n_buckets[0] * array_neighbors[i][1].reshape(-1, 1)
-                    + n_buckets[0]
-                    * n_buckets[1]
-                    * array_neighbors[i][2].reshape(-1, 1, 1)
-                ).flatten()
-                for i in bucket
-            }
-
-        nearest_neighbors = np.empty(len(slave_nodes))
-
-        for id_b in bucket:
-            # closest_node technique:
-            neighbor_master_nodes = np.array(
-                sum(
-                    [list(bucket_master.get(i, [])) for i in neighbors_buckets[id_b]],
-                    [],
-                )
-            )
-
-            if len(neighbor_master_nodes) == 0:
-                continue
-
-            dist_slave_nodes = spatial.distance_matrix(
-                mesh.nodes[slave_nodes[bucket[id_b]]], mesh.nodes[neighbor_master_nodes]
-            )
-            trial_node_indice = dist_slave_nodes.argmin(axis=1)
-
-            min_dist = np.take_along_axis(
-                dist_slave_nodes, np.expand_dims(trial_node_indice, axis=-1), axis=-1
-            ).ravel()
-            nearest_neighbors[bucket[id_b]] = -1 + (min_dist <= max_dist) * (
-                neighbor_master_nodes[trial_node_indice] + 1
-            )
-
-        return [
-            [] if nn == -1 else (mesh.elements == nn).sum(axis=1).nonzero()[0]
-            for nn in nearest_neighbors
-        ]
+        # brute force for the remaining slave nodes, by blocks to limit the
+        # memory
+        rows = np.flatnonzero(~complete)
+        block = max(1, 2**20 // max(1, n_master))
+        for start in range(0, len(rows), block):
+            sub = rows[start : start + block]
+            dist = np.linalg.norm(slave_crd[sub, np.newaxis, :] - master_crd, axis=2)
+            if exclude_self:
+                keep = sub < n_master
+                dist[np.flatnonzero(keep), sub[keep]] = np.inf
+            trial = dist.argmin(axis=1)
+            trial_node_indice[sub] = trial
+            min_dist[sub] = np.take_along_axis(dist, trial[:, np.newaxis], axis=1)[:, 0]
+        return trial_node_indice, min_dist
 
     def _nearest_node(self):
         """Find a list of elements that may be in contact for all slave nodes.
@@ -1019,24 +1076,13 @@ class Contact(AssemblyBase):
         in contact, possible_elements[i] is an empty list.
 
         """
-        possible_elements = []
-        for slave_node in self.slave_nodes:
-            dist_slave_nodes = np.linalg.norm(
-                self.mesh.nodes[slave_node] - self.mesh.nodes[self.master_nodes], axis=1
-            )
-            trial_node_indice = dist_slave_nodes.argmin()
-            if dist_slave_nodes[trial_node_indice] > self.max_dist:
-                # to improve performance, ignore contact if distance to the closest node is to high
-                possible_elements.append([])
-            else:
-                nearest_neighbors = self.master_nodes[trial_node_indice]
-                # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]])
-                possible_elements.append(
-                    (self.mesh.elements == nearest_neighbors).sum(axis=1).nonzero()[0]
-                )
-                # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el]]) #very slow
-
-        return possible_elements
+        trial_node_indice, min_dist = self._nearest_master_nodes()
+        # to improve performance, ignore contact if distance to the closest
+        # node is to high
+        nearest_neighbors = np.where(
+            min_dist > self.max_dist, -1, self.master_nodes[trial_node_indice]
+        )
+        return self._elements_of_nearest_nodes(nearest_neighbors)
 
 
 class SelfContact(Contact):
@@ -1114,192 +1160,48 @@ class SelfContact(Contact):
         in contact, possible_elements[i] is an empty list.
 
         """
-        possible_elements = []
-        for id_nd, slave_node in enumerate(self.slave_nodes):
-            dist_slave_nodes = np.linalg.norm(
-                self.mesh.nodes[slave_node] - self.mesh.nodes[self.master_nodes], axis=1
-            )
+        # nearest node without considering the distance of slave_node
+        # between itself
+        trial_node_indice, min_dist = self._nearest_master_nodes(exclude_self=True)
+        slave_nodes = np.asarray(self.slave_nodes)
+        close = np.flatnonzero(~(min_dist > self.max_dist))
+        nearest_neighbors = self.master_nodes[trial_node_indice[close]]
+        elements = np.asarray(self.mesh.elements)
+        elm_nearest = _elements_of_nodes(elements, nearest_neighbors)
+        elm_slave = _elements_of_nodes(elements, slave_nodes[close])
 
-            # get the indice with the minimal distance without considering the distance of slave_node between itself
-            trial_nodes_indices = []
-            if id_nd != 0:
-                trial_nodes_indices.append(dist_slave_nodes[:id_nd].argmin())
-
-            if id_nd != len(self.master_nodes) - 1:
-                trial_nodes_indices.append(
-                    dist_slave_nodes[id_nd + 1 :].argmin() + id_nd + 1
-                )
-
-            trial_node_indice = trial_nodes_indices[
-                np.argmin(dist_slave_nodes[trial_nodes_indices])
-            ]
-
-            if dist_slave_nodes[trial_node_indice] > self.max_dist:
-                # to improve performance, ignore contact if distance to the closest node is to high
-                possible_elements.append([])
-            else:
-                nearest_neighbors = self.master_nodes[trial_node_indice]
-                # possible_elements.append([el for el in range(self.mesh.n_elements) if nearest_neighbors in self.mesh.elements[el] and slave_node not in self.mesh.elements[el]]) #very slow
-                elm_with_slave_nd = (
-                    (self.mesh.elements == slave_node).sum(axis=1).nonzero()[0]
-                )
-                possible_elements.append(
-                    np.setdiff1d(
-                        (self.mesh.elements == nearest_neighbors)
-                        .sum(axis=1)
-                        .nonzero()[0],
-                        elm_with_slave_nd,
-                        True,
-                    )
-                )
-
+        # to improve performance, ignore contact if distance to the closest
+        # node is to high
+        possible_elements = [[] for _ in range(len(slave_nodes))]
+        for i, elm_nn, elm_sl in zip(close, elm_nearest, elm_slave):
+            # exclude the elements that contain the slave node
+            possible_elements[i] = np.setdiff1d(elm_nn, elm_sl, True)
         return possible_elements
 
     def _nearest_node_bucket_sort(self):
-        ndim = self.space.ndim
         mesh = self.mesh
-        master_nodes = self.master_nodes
-        slave_nodes = self.slave_nodes
-        max_dist = self.max_dist
-
+        bounding_box = mesh.bounding_box
         w = self.bucket_size
-        n_buckets = (mesh.bounding_box.size // w).astype(
-            int
-        )  # n of buckets along each direction
+        slave_nodes = np.asarray(self.slave_nodes)
+        nearest_neighbors = _bucket_nearest_master(
+            np.asarray(mesh.nodes),
+            bounding_box[0],
+            (bounding_box.size // w).astype(int),  # n of buckets along each direction
+            w,
+            self.space.ndim,
+            self.master_nodes,
+            slave_nodes,
+            self.max_dist,
+            (np.array([0, 1]), np.array([0, -1]), np.array([0, -1, 1])),
+            self_contact=True,
+        )
 
-        # bucket_sort master_nodes
-        bucket_crd = ((mesh.nodes[master_nodes] - mesh.bounding_box[0]) / w).astype(
-            int
-        )  # bucket coordinates (ie nth bucket in each direction) for master nodes
-        if ndim == 2:
-            bucket_id = bucket_crd[:, 0] + bucket_crd[:, 1] * n_buckets[0]
-        else:  # ndim == 3
-            bucket_id = (
-                bucket_crd[:, 0]
-                + bucket_crd[:, 1] * n_buckets[0]
-                + bucket_crd[:, 2] * n_buckets[0] * n_buckets[1]
-            )
-
-        sorted_indices = bucket_id.argsort()
-
-        temp = [0] + [
-            i
-            for i in range(1, len(bucket_id))
-            if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i - 1]]
-        ]
-        bucket_master = {
-            bucket_id[sorted_indices[temp[i]]]: master_nodes[
-                sorted_indices[temp[i] : temp[i + 1]]
-            ]
-            for i in range(0, len(temp) - 1)
-        }  # bucket[i] contain the master nodes in the ith bucket
-
-        # bucket_sort slave_nodes
-        bucket_crd = ((mesh.nodes[slave_nodes] - mesh.bounding_box[0]) / w).astype(
-            int
-        )  # bucket coordinates (ie nth bucket in each direction) for slave nodes
-        if ndim == 2:
-            bucket_id = bucket_crd[:, 0] + bucket_crd[:, 1] * n_buckets[0]
-        else:  # ndim == 3
-            bucket_id = (
-                bucket_crd[:, 0]
-                + bucket_crd[:, 1] * n_buckets[0]
-                + bucket_crd[:, 2] * n_buckets[0] * n_buckets[1]
-            )
-
-        sorted_indices = bucket_id.argsort()
-
-        temp = [0] + [
-            i
-            for i in range(1, len(bucket_id))
-            if bucket_id[sorted_indices[i]] != bucket_id[sorted_indices[i - 1]]
-        ]
-
-        bucket_crd = {
-            bucket_id[sorted_indices[temp[i]]]: bucket_crd[sorted_indices[temp[i]]]
-            for i in range(0, len(temp) - 1)
-        }  # store the bucket crd for each bucket id
-        bucket = {
-            bucket_id[sorted_indices[temp[i]]]: sorted_indices[temp[i] : temp[i + 1]]
-            for i in range(0, len(temp) - 1)
-        }  # contain the slave_nodes index for the ith bucket. Use self.slave_nodes[bucket_id] to retrive the corresponding node indices
-
-        # build dict that contains all neighbors buckets
-        side_m = np.array([0, 1])
-        side_p = np.array([0, -1])
-        inside = np.array([0, -1, 1])
-        array_neighbors = {
-            i: [
-                side_m
-                if bucket_crd[i][dd] == 0
-                else side_p
-                if bucket_crd[i][dd] == n_buckets[dd] - 1
-                else inside
-                for dd in range(ndim)
-            ]
-            for i in bucket
-        }
-
-        if ndim == 2:
-            neighbors_buckets = {
-                i: (
-                    i
-                    + array_neighbors[i][0]
-                    + n_buckets[0] * array_neighbors[i][1].reshape(-1, 1)
-                ).flatten()
-                for i in bucket
-            }
-        else:  # ndim == 3:
-            neighbors_buckets = {
-                i: (
-                    i
-                    + array_neighbors[i][0]
-                    + n_buckets[0] * array_neighbors[i][1].reshape(-1, 1)
-                    + n_buckets[0]
-                    * n_buckets[1]
-                    * array_neighbors[i][2].reshape(-1, 1, 1)
-                ).flatten()
-                for i in bucket
-            }
-
-        nearest_neighbors = np.empty(len(slave_nodes))
-
-        for id_b in bucket:
-            # closest_node technique:
-            neighbor_master_nodes = np.array(
-                sum(
-                    [list(bucket_master.get(i, [])) for i in neighbors_buckets[id_b]],
-                    [],
-                )
-            )
-
-            if len(neighbor_master_nodes) == 0:
-                continue
-
-            dist_slave_nodes = spatial.distance_matrix(
-                mesh.nodes[slave_nodes[bucket[id_b]]], mesh.nodes[neighbor_master_nodes]
-            )
-            np.fill_diagonal(
-                dist_slave_nodes, np.inf
-            )  # to avoid selecting self as nearest_neibourgh
-            trial_node_indice = dist_slave_nodes.argmin(axis=1)
-
-            min_dist = np.take_along_axis(
-                dist_slave_nodes, np.expand_dims(trial_node_indice, axis=-1), axis=-1
-            ).ravel()
-            nearest_neighbors[bucket[id_b]] = -1 + (min_dist <= max_dist) * (
-                neighbor_master_nodes[trial_node_indice] + 1
-            )
-
-        # return [[] if nn == -1 else (mesh.elements == nn).sum(axis=1).nonzero()[0] for nn in nearest_neighbors]
-
+        possible_elements = self._elements_of_nearest_nodes(nearest_neighbors)
         # exclusde elements that containts the slave_node
-        return [
-            []
-            if nn == -1
-            else (
-                (mesh.elements == nn).sum(axis=1)
-                * (mesh.elements != slave_nd).sum(axis=1)
-            ).nonzero()[0]
-            for slave_nd, nn in zip(slave_nodes, nearest_neighbors)
-        ]
+        elements = np.asarray(mesh.elements)
+        for i in np.flatnonzero(nearest_neighbors != -1):
+            elm = possible_elements[i]
+            possible_elements[i] = elm[
+                (elements[elm] != slave_nodes[i]).sum(axis=1) != 0
+            ]
+        return possible_elements
