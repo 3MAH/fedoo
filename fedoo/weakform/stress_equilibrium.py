@@ -65,6 +65,32 @@ class StressEquilibrium(WeakFormBase):
     space: ModelingSpace
         Modeling space associated to the weakform. If None is specified,
         the active ModelingSpace is considered.
+
+    Notes
+    -----
+    The assembly option ``assume_sym`` tells the assembly to build only the
+    blocks of the tangent matrix that couple a displacement component with
+    itself or with a following one, and to mirror the others. When it is not
+    set, it is resolved when the problem is initialized:
+
+    * True in small strain, with ``nlgeom="TL"``, and with ``nlgeom="UL"``
+      when ``convert_tangent=False``;
+    * False with ``nlgeom="UL"`` when the tangent is converted
+      (``convert_tangent=True``): the spatial tangent is major-symmetric only
+      when :math:`dS/dE` is, and every block is assembled by default;
+    * False with ``incompressibility="fbar"``, whatever ``nlgeom``.
+
+    With ``nlgeom="TL"`` the default is a choice of speed. The tangent
+    :math:`dS/dE` is major-symmetric for a hyperelastic law, and the mirrored
+    matrix is then the exact one. It is not for every law (a rate-form law in
+    a non-coaxial state for instance): the mirrored blocks are then
+    approximate, the residual is not affected, and the Newton-Raphson
+    iterations converge to the same solution, with a few more iterations in
+    some cases. To assemble every block, set the option before the assembly
+    is created::
+
+        wf = fd.weakform.StressEquilibrium(material, nlgeom="TL")
+        wf.assembly_options["assume_sym"] = False
     """
 
     def __init__(
@@ -120,9 +146,8 @@ class StressEquilibrium(WeakFormBase):
         self.convert_tangent = convert_tangent
         self.geometric_stiffness = None
 
-        # assume_sym is decided at initialize time: True for linear / TL
-        # (symmetric tangent), False for UL where the Lie spatial tangent is
-        # not major-symmetric. A user-set value takes precedence.
+        # assume_sym is decided at initialize time (see the class Notes). A
+        # user-set value takes precedence.
 
     def get_storage(self):
         if self.storage is not None:

@@ -101,7 +101,8 @@ class StressEquilibriumMixed(StressEquilibrium):
             # StressDev is directly the output of the constitutive law in update_2.
             # H is the isochoric part of the tangent as it is computed from F_bar.
             sigma_dev = assembly.sv.get("StressDev", initial_stress)
-            H_dev = [list(row) for row in H]  # Copy to avoid modifying SV directly
+            # rows copied: the components stay views of the state variable
+            H_dev = [list(row) for row in H]
 
             # # Correction term: -2/3 * (sigma_dev_i + sigma_dev_j)
             # # This accounts for the derivative of J^(-1/3)
@@ -109,7 +110,7 @@ class StressEquilibriumMixed(StressEquilibrium):
                 for j in range(6):
                     term_i = sigma_dev[i] if j < 3 else 0.0
                     term_j = sigma_dev[j] if i < 3 else 0.0
-                    H_dev[i][j] -= (2.0 / 3.0) * (term_i + term_j)
+                    H_dev[i][j] = H_dev[i][j] - (2.0 / 3.0) * (term_i + term_j)
         else:
             # Small strain:
             # p_mat is > 0 for compressive

@@ -106,6 +106,13 @@ semantic versioning.
 
 ### Changed
 
+- **The default of ``assume_sym`` is documented in ``StressEquilibrium``**
+  (Notes of the class): True in small strain and total Lagrangian, False in
+  updated Lagrangian with a converted tangent and with F-bar. In total
+  Lagrangian it is a choice of speed that is exact for hyperelastic laws and
+  approximates the mirrored blocks otherwise; the docstring gives the option
+  to assemble every block. No change of behaviour.
+
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
@@ -257,6 +264,15 @@ semantic versioning.
   nested lists.
 
 ### Fixed
+
+- **``StressEquilibriumMixed`` modified the stored tangent in finite strain.**
+  The correction of the deviatoric tangent (``-2/3 (sigma_i + sigma_j)``) was
+  subtracted in place from the components of ``assembly.sv["TangentMatrix"]``
+  at each call of ``get_weak_equation``: twice per Newton-Raphson iteration,
+  and again after each return to the start of the increment, since the saved
+  state shares the same array. It is now applied on a copy:
+  the matrix of the mixed (u, p) form changes with ``nlgeom`` "UL" or "TL"
+  whenever the weak equation is built more than once from the same state.
 
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
