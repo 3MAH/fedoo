@@ -773,9 +773,10 @@ class RigidBody:
         asm._ipc_build_dhat = dhat
         asm._ipc_broad_phase = ipctk.LBVH()
         asm._ipc_use_ccd = bool(use_ccd)
-        asm._ipc_rest_positions = body_nodes.copy()
+        # plain ndarray copies: pyvista arrays slow down the vertex updates
+        asm._ipc_rest_positions = np.array(body_nodes, order="C")
         asm._ipc_n_body = n_body
-        asm._ipc_obstacle_nodes = obst_nodes.copy()
+        asm._ipc_obstacle_nodes = np.array(obst_nodes, order="C")
         # Keep the same frozen geometry for optional result export. The source
         # identity lets shared obstacles be deduplicated across rigid bodies.
         asm._ipc_obstacle_mesh = Mesh(
@@ -892,7 +893,7 @@ class RigidBody:
         asm._ipc_build_dhat = 2 * dhat + dmin
         asm._ipc_broad_phase = ipctk.LBVH()
         asm._ipc_use_ccd = bool(use_ccd)
-        asm._ipc_rest_positions = body_nodes.copy()
+        asm._ipc_rest_positions = np.array(body_nodes, order="C")  # plain ndarray copy
         asm._ipc_n_body = len(body_nodes)
         asm._ipc_obstacle_nodes = np.zeros((0, 3))
 
