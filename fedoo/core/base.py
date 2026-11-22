@@ -779,6 +779,20 @@ class ProblemBase:
         # near null space of the reduced system (see Problem); None: unknown
         return None
 
+    def _new_solver_context(self):
+        """Return a new solver context of the kind used by :meth:`_solve`.
+
+        For another matrix solved alongside the system matrix (each keeps its
+        own analysis and factorization). None if the solver keeps no context.
+        """
+        if self._factor_context is not None:
+            return type(self._factor_context)(self._solver_symmetric)
+        if isinstance(self._kept_solver, _MumpsFactor):
+            return _MumpsFactor(self._solver_symmetric)
+        if isinstance(self._kept_solver, _PetscSolver):
+            return _PetscSolver(**self.__solver[2])
+        return None
+
     def _assume_sym(self):
         # True if the matrix of the problem is assembled as symmetric
         return False

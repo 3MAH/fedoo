@@ -87,6 +87,11 @@ semantic versioning.
 
 ### Changed
 
+- `ExplicitDynamic` keeps its effective mass matrix while the time step and
+  the mass do not change, the reduced consistent mass while the mass and the
+  constraints do not change, and, with central differences on a linear
+  problem, the internal force computed at the end of an increment for the
+  start of the next one. Results are unchanged.
 - The direct solvers kept by a problem (python-mumps, PETSc) skip the
   factorization of a matrix that has the pattern and the values of the one
   already factorized, e.g. the tangent matrix kept for the elastic prediction
@@ -275,6 +280,10 @@ semantic versioning.
 
 ### Fixed
 
+- `ExplicitDynamic` with a consistent mass (`mass_lumping=False`) and
+  `set_reuse_factorization(True)`: the end-step accelerations were solved
+  with the factorization of the effective matrix M/dt^2 instead of the one of
+  M, i.e. multiplied by dt^2. The mass now has its own solver context.
 - `set_solver(..., symmetric=True)` with python-mumps 0.0.6, whose `Context`
   has no `sym` argument, raised `NotImplementedError`: the symmetry is now
   given with the matrix (`set_matrix(A, symmetric=True)`).

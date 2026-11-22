@@ -129,9 +129,15 @@ class ExplicitDynamic(Problem):
         self._assembly_storage_providers = []
         self._stiffness_matrix = None
         self._constant_internal_force = None
+        self._internal_force_cache = None  # see _linear_internal_force
         self._rayleigh_damping = None
         self._rayleigh_damping_matrix = None
         self._output_counter = 0
+        # kept across the increments: effective mass (see _update_a), and for
+        # a consistent mass, the reduced mass and its solver (see _solve_mass)
+        self._effective_mass = None
+        self._reduced_mass = None
+        self._mass_solver = None
 
         self._state = ExplicitDynamicState(
             displacement=self._new_vect_dof(),
@@ -271,12 +277,42 @@ class ExplicitDynamic(Problem):
         ):
             acceleration[free] = force[free] / self._mass[free]
         else:
-            reduced_mass = self._MatCB.T @ self._mass_matrix @ self._MatCB
             reduced_force = self._MatCB.T @ force
             acceleration += np.asarray(
-                self._MatCB @ self._solve(reduced_mass, reduced_force)
+                self._MatCB @ self._solve_mass(reduced_force)
             ).ravel()
         return acceleration
+
+    def _solve_mass(self, rhs):
+        """Solve MatCB.T M MatCB x = rhs for the consistent mass M.
+
+        The reduced mass is kept while M and MatCB are the same objects, and
+        solved with a solver context of its own: its factorization is not
+        that of the effective matrix of solve().
+        """
+        mat_cb, mass = self._MatCB, self._mass_matrix
+        cached = self._reduced_mass
+        if cached is None or cached[0] is not mass or cached[1] is not mat_cb:
+            cached = (mass, mat_cb, mat_cb.T @ mass @ mat_cb)
+            self._reduced_mass = cached
+        reduced_mass = cached[2]
+        # a context of the solver currently used by _solve: rebuilt when the
+        # solver (or the factorization reuse) is changed
+        owner = (self._factor_context, self._kept_solver)
+        if (
+            self._mass_solver is None
+            or self._mass_solver[0] is not owner[0]
+            or self._mass_solver[1] is not owner[1]
+        ):
+            previous = self._mass_solver[2] if self._mass_solver else None
+            if hasattr(previous, "close"):
+                previous.close()  # pypardiso keeps its native memory otherwise
+            self._mass_solver = owner + (self._new_solver_context(),)
+        solver = self._mass_solver[2]
+        if solver is None:
+            return self._solve(reduced_mass, rhs)
+        solver.factor(reduced_mass)
+        return solver.solve(rhs)
 
     def _initialize_current_acceleration(self):
         """Establish ``a_n = M^-1 f(u_n, v_n)`` before the first drift."""
@@ -308,9 +344,22 @@ class ExplicitDynamic(Problem):
             and not self._assembly_storage_providers
             and self._mass is not None
         ):
-            self.set_A(factor * self._mass)
+            mass = self._mass
         else:
-            self.set_A(factor * self._mass_matrix)
+            mass = self._mass_matrix
+        # the effective mass is kept (with what is cached on it: reduced
+        # matrix, factorization) while the factor and the mass do not change
+        cached = self._effective_mass
+        if (
+            cached is not None
+            and cached[0] == factor
+            and cached[1] is mass
+            and self.get_A() is cached[2]
+        ):
+            return
+        A = factor * mass
+        self.set_A(A)
+        self._effective_mass = (factor, mass, A)
 
     def _assembly_inertia_bias(self, velocity):
         force = self._new_vect_dof()
@@ -377,8 +426,28 @@ class ExplicitDynamic(Problem):
         return force
 
     def _linear_internal_force(self, displacement):
-        force = -np.asarray(self._stiffness_matrix @ displacement).ravel()
-        return force + self._constant_internal_force
+        # central difference: the force at the start of an increment is the
+        # one computed at the end of the previous one (same displacement)
+        stiffness, constant = self._stiffness_matrix, self._constant_internal_force
+        if not self.time_integrator.needs_end_step_acceleration:
+            return -np.asarray(stiffness @ displacement).ravel() + constant
+        cached = self._internal_force_cache
+        if (
+            cached is not None
+            and cached[0] is stiffness
+            and cached[1] is constant
+            and np.array_equal(cached[2], displacement)
+        ):
+            return cached[3].copy()
+        force = -np.asarray(stiffness @ displacement).ravel()
+        force = force + constant
+        self._internal_force_cache = (
+            stiffness,
+            constant,
+            np.array(displacement, dtype=float, copy=True),
+            force.copy(),
+        )
+        return force
 
     def _update_d(self):
         """Build the effective right-hand vector for the prepared increment."""
