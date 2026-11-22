@@ -306,7 +306,7 @@ def test_mumps_factor_reuses_analysis_on_same_pattern(monkeypatch):
     A_zero.data[1] = 0.0  # explicit zero: same pattern
     A_other = sp.csr_matrix([[2.0, 0.0], [1.0, -1.0]])
     factor = _MumpsFactor()
-    for M in (A, 3.0 * A, A_zero, A_other, A_other):
+    for M in (A, 3.0 * A, A_zero, A_other, 2.0 * A_other):
         factor.factor(M)
     assert reuse == [False, True, True, False, True]
 

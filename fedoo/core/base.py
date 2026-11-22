@@ -1125,6 +1125,7 @@ class _PetscSolver:
         self.near_null_space_provider = None  # set by the problem
         self._mat = None
         self._pattern = None
+        self._values = None  # values of the matrix set up last
 
     def factor(self, A):
         """Set the matrix of the next solves (factorized if direct)."""
@@ -1138,13 +1139,20 @@ class _PetscSolver:
             and np.array_equal(A.indptr, self._pattern[1])
             and np.array_equal(A.indices, self._pattern[2])
         )
+        if same and self._values is not None and np.array_equal(A.data, self._values):
+            # values of the matrix set up: factorization and preconditioner
+            # are still valid
+            return
+        self._values = None
+        pattern = self._pattern
         if same:
             # same Mat object, new values: PETSc keeps the symbolic data
             self._mat.zeroEntries()
             self._mat.setValuesCSR(A.indptr, A.indices, A.data)
             self._mat.assemble()
         else:
-            self._pattern = (A.shape, A.indptr.copy(), A.indices.copy())
+            pattern = (A.shape, A.indptr.copy(), A.indices.copy())
+            self._pattern = None  # until the setup has succeeded
             self._mat = PETSc.Mat().createAIJ(
                 A.shape, csr=(A.indptr, A.indices, A.data), comm=self._comm
             )
@@ -1158,6 +1166,8 @@ class _PetscSolver:
         self._ksp.setUp()  # factorization (direct) or preconditioner setup
         if self._reuse_preconditioner:
             self._ksp.getPC().setReusePreconditioner(True)
+        self._pattern = pattern
+        self._values = A.data.copy()
 
     def _set_near_null_space(self):
         if not (
@@ -1183,6 +1193,7 @@ class _PetscSolver:
     def reset_preconditioner(self):
         """Rebuild the preconditioner at the next :meth:`factor`."""
         self._ksp.getPC().setReusePreconditioner(False)
+        self._values = None  # even for a matrix with the same values
 
     def solve(self, B):
         b = self._mat.createVecLeft()
@@ -1284,6 +1295,11 @@ class _MumpsFactor:
         self._pattern = None
         # positions in A.data of the values held by the context (same pattern)
         self._entries = None
+        self._all_entries = False  # _entries is arange(A.nnz)
+        # values of the factorized matrix, kept only when the context does not
+        # expose its own (_entries is None); None: no valid factorization
+        self._values = None
+        self._factored = False  # the context holds the factors of its values
 
     def factor(self, A):
         A = A.tocsr()
@@ -1296,11 +1312,24 @@ class _MumpsFactor:
         if same and self._entries is not None:
             # MUMPS points to the arrays given by set_matrix: new values are
             # written in place, without its coo conversion and triangle extraction
-            np.take(A.data, self._entries, out=self._ctx.data)
+            data = self._ctx.data
+            values = A.data if self._all_entries else A.data[self._entries]
+            if self._factored and np.array_equal(values, data):
+                return  # values of the factorized matrix: factors still valid
+            data[...] = values
+            self._factored = False
             self._ctx.factor(reuse_analysis=True)
+            self._factored = True
             return
+        if same and self._factored and np.array_equal(A.data, self._values):
+            return  # same values, see above
+        self._factored = False
+        self._values = None
+        self._entries = None
+        pattern = self._pattern
         if not same:
-            self._pattern = (A.shape, A.indptr.copy(), A.indices.copy())
+            pattern = (A.shape, A.indptr.copy(), A.indices.copy())
+            self._pattern = None  # until the factorization has succeeded
         if self._sym_with_matrix:
             self._ctx.set_matrix(A, symmetric=True)
         else:
@@ -1314,7 +1343,12 @@ class _MumpsFactor:
             if n_threads is not None and instance is not None:
                 instance.icntl[16] = n_threads
         self._ctx.factor(reuse_analysis=same)
+        self._pattern = pattern
+        self._factored = True
         self._entries = self._given_entries(A)
+        self._all_entries = self._entries is not None and len(self._entries) == A.nnz
+        if self._entries is None:
+            self._values = A.data.copy()
 
     def _given_entries(self, A):
         """Positions in A.data of the values that set_matrix gave to MUMPS

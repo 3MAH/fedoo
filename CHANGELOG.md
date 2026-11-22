@@ -87,6 +87,12 @@ semantic versioning.
 
 ### Changed
 
+- The direct solvers kept by a problem (python-mumps, PETSc) skip the
+  factorization of a matrix that has the pattern and the values of the one
+  already factorized, e.g. the tangent matrix kept for the elastic prediction
+  of the next increment or the constant matrix of a linear transient
+  problem. Results are unchanged, except with multithreaded MUMPS where they
+  may differ at round-off level from a run that refactorizes.
 - **Requires simcoon >= 2.6** (was 2.3). Finite strain kinematics and shell / beam
   rotations go through the simcoon 2.6 batch calls (`G_UdX_to_F`, `rotvec_to_matrix`,
   `matrix_to_rotvec`, `dexp_inv`) on `N_THREADS` threads: F and det F of every nlgeom formulation (standard, F-bar, mean
