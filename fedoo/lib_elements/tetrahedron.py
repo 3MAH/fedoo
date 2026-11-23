@@ -1,6 +1,6 @@
 import numpy as np
 
-from fedoo.lib_elements.element_base import Element
+from fedoo.lib_elements.element_base import Element, _cached_by_points
 
 
 class ElementTetrahedron(Element):
@@ -161,6 +161,7 @@ class Tet10(ElementTetrahedron):
             4 * xi * (1 - xi - eta - zeta),
         ]
 
+    @_cached_by_points
     def shape_function_derivative(self, vec_xi):
         vec_m = [1 - xi[0] - xi[1] - xi[2] for xi in vec_xi]
         return [

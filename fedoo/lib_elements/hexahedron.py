@@ -1,7 +1,7 @@
 import numpy as np
 
 
-from fedoo.lib_elements.element_base import Element
+from fedoo.lib_elements.element_base import Element, _cached_by_points
 
 
 class ElementHexahedron(Element):
@@ -238,6 +238,7 @@ class Hex8(ElementHexahedron):
             0.125 * (1 - xi) * (1 + eta) * (1 + zeta),
         ]
 
+    @_cached_by_points
     def shape_function_derivative(self, vec_xi):
         return [
             np.array(
@@ -371,6 +372,7 @@ class Hex20(ElementHexahedron):
             0.25 * (1 - zeta**2) * (1 - xi) * (1 + eta),
         ]
 
+    @_cached_by_points
     def shape_function_derivative(self, vec_xi):
         return [
             np.array(
