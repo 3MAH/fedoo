@@ -1,6 +1,22 @@
 """This module contains the AssemblySum class"""
 
+from scipy import sparse
+
 from fedoo.core.base import AssemblyBase
+
+
+def _sum_matrices(matrices):
+    """Return ``sum(matrices)`` without its first addition ``0 + matrices[0]``.
+
+    That addition only copies a sparse matrix: ``(0 + A) + B`` is ``A + B``.
+    """
+    if len(matrices) < 2 or not sparse.issparse(matrices[0]):
+        return sum(matrices)
+    res = matrices[0] + matrices[1]
+    for matrix in matrices[2:]:
+        res = res + matrix
+    return res
+
 
 # =============================================================
 # Class that build a sum of Assembly
@@ -76,7 +92,7 @@ class AssemblySum(AssemblyBase):
                 self.list_assembly[numAssembly].assemble_global_mat(compute)
 
         if not (compute == "vector"):
-            self.global_matrix = sum(
+            self.global_matrix = _sum_matrices(
                 [assembly.get_global_matrix() for assembly in self.list_assembly]
             )
         if not (compute == "matrix"):
@@ -102,7 +118,7 @@ class AssemblySum(AssemblyBase):
                 self.list_assembly[numAssembly].update(pb, compute)
 
         if not (compute == "vector"):
-            self.current.global_matrix = sum(
+            self.current.global_matrix = _sum_matrices(
                 [
                     assembly.current.get_global_matrix()
                     for assembly in self.list_assembly
@@ -126,7 +142,7 @@ class AssemblySum(AssemblyBase):
             assembly.set_start(pb)
 
         # Update the global matrix to the trial values (generally elastic tangent matrix)
-        self.current.global_matrix = sum(
+        self.current.global_matrix = _sum_matrices(
             [assembly.current.get_global_matrix() for assembly in self.list_assembly]
         )
         # in principle no need to update global vector here because the current state is not modified by set_start. Could be improved by removing the next line
@@ -153,7 +169,7 @@ class AssemblySum(AssemblyBase):
         """
         for assembly in self._list_assembly:
             assembly.to_start(pb)
-        self.current.global_matrix = sum(
+        self.current.global_matrix = _sum_matrices(
             [assembly.current.get_global_matrix() for assembly in self.list_assembly]
         )
         self.current.global_vector = sum(
