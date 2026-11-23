@@ -96,9 +96,9 @@ def test_fe2_with_homogeneous_cell_matches_single_scale():
     fd.Assembly.delete_memory()
     fd.ModelingSpace("3D")
     fe2 = fd.constitutivelaw.FE2(
-        _micro_assembly(fd.constitutivelaw.ElasticIsotrop(1e5, 0.3))
+        _micro_assembly(fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)),
+        micro_nr_options={"tol": 1e-8},
     )
-    fe2.tol_nr = 1e-8
     disp, stress, force = _solve_bar(fe2, history)
 
     np.testing.assert_allclose(disp, disp_ref, atol=1e-9 * abs(disp_ref).max())
@@ -113,8 +113,9 @@ def test_fe2_elastoplastic_cell_tangent_and_unloading():
     props = np.array([1e5, 0.3, 1e-5, 300.0, 1000.0, 1.0])  # yield stress 300
     material = fd.constitutivelaw.Simcoon("EPICP", props)
     material.tangent_mode = 2  # algorithmic tangent
-    fe2 = fd.constitutivelaw.FE2(_micro_assembly(material))
-    fe2.tol_nr = 1e-10
+    fe2 = fd.constitutivelaw.FE2(
+        _micro_assembly(material), micro_nr_options={"tol": 1e-10}
+    )
     macro_mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2)
     macro_weakform = fd.weakform.StressEquilibrium(fe2)
     macro_assembly = fd.Assembly.create(macro_weakform, macro_mesh, n_elm_gp=1)
@@ -192,3 +193,79 @@ def test_fe2_update_is_repeatable_and_keeps_the_start_state():
         if getattr(bc, "variable_name", "").startswith("E")
     ]
     assert len(strain_conditions) == 6
+
+
+def test_fe2_advances_a_viscoelastic_cell_during_a_strain_hold():
+    pytest.importorskip("simcoon")
+    fd.ModelingSpace("3D")
+    props = np.array([3000.0, 0.35, 0.0, 1500.0, 0.35, 3000.0, 1200.0])
+    material = fd.constitutivelaw.Simcoon("ZENER", props)
+    fe2 = fd.constitutivelaw.FE2(_micro_assembly(material))
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2)
+    assembly = fd.Assembly.create(fd.weakform.StressEquilibrium(fe2), mesh, n_elm_gp=1)
+    problem = fd.problem.NonLinear(assembly)
+    problem.initialize()
+    problem.set_start()
+    problem.dtime = 1.0
+    assembly.sv["Strain"] = StrainTensorList(np.array([[0.001, 0, 0, 0, 0, 0]]).T)
+    fe2.update(assembly, problem)
+    problem.time = 1.0
+    problem.set_start()
+    initial_stress = assembly.sv["Stress"].asarray()[0, 0]
+
+    fe2.update(assembly, problem)
+
+    assert 0 < assembly.sv["Stress"].asarray()[0, 0] < initial_stress
+    assert fe2.list_problem[0].time == 2.0
+
+
+def test_fe2_micro_failure_cuts_the_macro_step_and_saves_only_accepted_times(
+    monkeypatch,
+):
+    fd.ModelingSpace("3D")
+    material = fd.constitutivelaw.ElasticIsotrop(1e5, 0.3)
+    fe2 = fd.constitutivelaw.FE2(
+        _micro_assembly(material),
+        micro_nr_options={"criterion": "Displacement", "tol": 1e-8, "max_subiter": 9},
+    )
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2)
+    assembly = fd.Assembly.create(fd.weakform.StressEquilibrium(fe2), mesh, n_elm_gp=1)
+    problem = fd.problem.NonLinear(assembly)
+    problem.initialize()
+    problem.bc.add("Dirichlet", mesh.find_nodes("X", 0), "Disp", 0)
+    problem.bc.add("Dirichlet", mesh.find_nodes("X", 1), "DispX", 0.001)
+    micro = fe2.list_problem[0]
+    assert micro.nr_parameters["criterion"] == "Displacement"
+    solve = micro.solve_time_increment
+    attempts = []
+    saved_times = []
+    restore = problem.to_start
+
+    def solve_trial(max_subiter, tol_nr):
+        assert (max_subiter, tol_nr) == (9, 1e-8)
+        span = micro.tmax - micro.t0
+        attempts.append((span, micro.dtime))
+        if span > 0.25:
+            # Accept one provisional quarter step, then exhaust the retries.
+            if micro.dtime != 0.25 or micro.time != micro.t0:
+                return False, 1, 1.0
+        elif micro.dtime > 0.0625:
+            return False, 1, 1.0
+        return solve(max_subiter, tol_nr)
+
+    def check_rollback():
+        restore()
+        np.testing.assert_array_equal(micro.get_disp(), 0)
+        np.testing.assert_array_equal(problem.get_disp(), 0)
+
+    monkeypatch.setattr(micro, "solve_time_increment", solve_trial)
+    monkeypatch.setattr(
+        micro, "save_results", lambda *_: saved_times.append(micro.time)
+    )
+    monkeypatch.setattr(problem, "to_start", check_rollback)
+    problem.nlsolve(dt=1.0, tmax=1.0, dt_increase_niter=0, print_info=0)
+
+    assert (1.0, 1.0) in attempts
+    assert (1.0, 0.25) in attempts
+    assert (0.25, 0.0625) in attempts
+    assert saved_times == [0.25, 0.5, 0.75, 1.0]

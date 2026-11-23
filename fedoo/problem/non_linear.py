@@ -10,6 +10,10 @@ import warnings
 from typing import Callable
 
 
+class NonlinearConvergenceError(RuntimeError):
+    """A nonlinear increment failed after exhausting its time-step retries."""
+
+
 class NonLinear(Problem):
     def __init__(self, assembly, nlgeom=False, name="MainProblem"):
         if isinstance(assembly, str):
@@ -1023,9 +1027,8 @@ class NonLinear(Problem):
 
         try:
             self.elastic_prediction()
-        except InvalidKinematicStateError:
-            # No kinematically valid line-search trial exists, even for its
-            # smallest step: use the normal failed-increment/time-step-cut path.
+        except (InvalidKinematicStateError, NonlinearConvergenceError):
+            # A rejected trial follows the normal time-step-cut path.
             self._t_fact_inc = None
             return 0, subiter, error
 
@@ -1045,9 +1048,8 @@ class NonLinear(Problem):
             # update Stress and initial displacement and Update stiffness matrix
             try:
                 self.update(compute="vector")  # out of balance force vector
-            except InvalidKinematicStateError:
-                # the current iterate inverts elements: failed increment ->
-                # the caller cuts the time step and restores the state
+            except (InvalidKinematicStateError, NonlinearConvergenceError):
+                self._t_fact_inc = None
                 return 0, subiter, error
             self._update_d()  # required to compute the NR error
 
@@ -1153,7 +1155,7 @@ class NonLinear(Problem):
                         self.set_A(KE)
                         try:
                             self.elastic_prediction(keep_tangent=True)
-                        except InvalidKinematicStateError:
+                        except (InvalidKinematicStateError, NonlinearConvergenceError):
                             self._t_fact_inc = None
                             return 0, subiter, error
                         continue
@@ -1192,7 +1194,7 @@ class NonLinear(Problem):
 
             try:
                 self.solve_nr_increment()
-            except InvalidKinematicStateError:
+            except (InvalidKinematicStateError, NonlinearConvergenceError):
                 self._t_fact_inc = None
                 return 0, subiter, error
 
@@ -1203,7 +1205,7 @@ class NonLinear(Problem):
             try:
                 self.update(compute="vector")
                 self._update_d()
-            except InvalidKinematicStateError:
+            except (InvalidKinematicStateError, NonlinearConvergenceError):
                 self._t_fact_inc = None
                 return 0, subiter, error
             self._t_fact_inc = None
@@ -1227,6 +1229,8 @@ class NonLinear(Problem):
         callback: Callable[[Problem, ...], None] | None = None,
         exec_callback_at_each_iter: bool | None = None,
         dt_max: float | None = None,
+        *,
+        _trial: bool = False,
     ) -> None:
         """Solve the non linear problem using the newton-raphson algorithm.
 
@@ -1335,7 +1339,7 @@ class NonLinear(Problem):
             else:
                 interval_output = 1
 
-        if self.save_at_exact_time:
+        if self.save_at_exact_time and not _trial:
             next_time = self.t0 + interval_output
         else:
             next_time = self.tmax  # next_time is the next exact time where the algorithm have to stop for output purpose
@@ -1359,17 +1363,23 @@ class NonLinear(Problem):
             )
 
         restart = False  # bool to know if the iteration is another attempt
+        # A nested trial starts from an already prepared committed state. Only
+        # its intermediate substeps are committed, and it produces no output.
+        if _trial:
+            callback = None
+        err_num = min(self.err_num, dt_min * 0.01) if _trial else self.err_num
 
-        while self.time < self.tmax - self.err_num:
-            save_results = (self.time == next_time) or (
-                self.save_at_exact_time == False and self.__iter % interval_output == 0
+        while self.time < self.tmax - err_num:
+            save_results = not _trial and (
+                (self.time == next_time)
+                or (not self.save_at_exact_time and self.__iter % interval_output == 0)
             )
 
             # update next_time
             if self.time == next_time:
                 # self.save_at_exact_time should be True
                 next_time = next_time + interval_output
-                if next_time > self.tmax - self.err_num:
+                if next_time > self.tmax - err_num:
                     next_time = self.tmax
 
             # keep the time step of the increment that has just been completed:
@@ -1378,7 +1388,7 @@ class NonLinear(Problem):
             self._dtime_prev = self.dtime
 
             if (
-                self.time + dt > next_time - self.err_num
+                self.time + dt > next_time - err_num
             ):  # if dt is too high, it is reduced to reach next_time
                 self.dtime = next_time - self.time
             else:
@@ -1388,7 +1398,7 @@ class NonLinear(Problem):
                 # reset internal variables, update Stress, initial displacement and assemble global matrix at previous time
                 self.to_start()
                 restart = False
-            else:
+            elif not _trial or self.time != self.t0:
                 self.set_start(save_results, callback)
 
             # self.solve_time_increment = Newton Raphson loop
@@ -1398,7 +1408,8 @@ class NonLinear(Problem):
 
             if convergence:
                 self.time = self.time + self.dtime  # update time value
-                self.__iter += 1
+                if not _trial:
+                    self.__iter += 1
 
                 if self.print_info > 0:
                     print(
@@ -1427,7 +1438,7 @@ class NonLinear(Problem):
                         # roll back to the last converged increment so accessors
                         # return a clean state after the abort
                         self.to_start()
-                        raise RuntimeError(
+                        raise NonlinearConvergenceError(
                             "Current time step is inferior to the specified minimal time step (dt_min)"
                         )
 
@@ -1436,14 +1447,17 @@ class NonLinear(Problem):
                     continue
                 else:
                     self.to_start()
-                    raise RuntimeError(
+                    raise NonlinearConvergenceError(
                         "Newton Raphson iteration has not converged - Reduce the time step or use update_dt = True"
                     )
 
         # the last increment is finalized with its own dt (the loop-top value
         # is that of the previous one, or of a failed attempt)
         self._dtime_prev = self.dtime
-        self.set_start(True, callback)
+        if _trial:
+            self.time = self.tmax
+        else:
+            self.set_start(True, callback)
 
     @property
     def assembly(self):

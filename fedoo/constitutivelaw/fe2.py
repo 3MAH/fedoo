@@ -9,17 +9,8 @@ from fedoo.homogen.tangent_stiffness import (
     get_homogenized_stiffness,
     get_tangent_stiffness,
 )
-from fedoo.problem.non_linear import NonLinear
+from fedoo.problem.non_linear import NonLinear, NonlinearConvergenceError
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
-
-
-def _leaf_assemblies(assembly):
-    """Return the assemblies that hold state variables under an assembly."""
-    if hasattr(assembly, "list_assembly"):
-        return [
-            leaf for item in assembly.list_assembly for leaf in _leaf_assemblies(item)
-        ]
-    return [assembly]
 
 
 class FE2(Mechanical3D):
@@ -44,37 +35,31 @@ class FE2(Mechanical3D):
         assembly per macroscopic integration point.
     name : str, optional
         Name of the constitutive law.
+    micro_nr_options : mapping, optional
+        Options forwarded to each microscopic problem's
+        :meth:`~fedoo.problem.non_linear.NonLinear.set_nr_criterion`. FE²
+        defaults to ``tol=0.05`` and ``dt_increase_niter=0`` (once a substep
+        is cut, it is kept at the smaller size).
 
     Attributes
     ----------
-    tol_nr : float, default=0.05
-        Tolerance of the Newton-Raphson algorithm of the microscopic
-        problems. The macroscopic stress and tangent carry an error of about
-        a hundredth of this value: take it at least ten times smaller than
-        the tolerance of the macroscopic problem.
     use_elastic_lt : bool, default=True
         If True, the elastic homogenized matrix is used for the prediction of
         each macroscopic increment.
 
     Notes
     -----
-    The homogenized tangent is the exact derivative of the macroscopic stress
-    when the tangent of the microscopic laws is the algorithmic one (for a
-    :py:class:`fedoo.constitutivelaw.Simcoon` law, ``tangent_mode=2``). With a
-    continuum tangent the macroscopic Newton-Raphson iterations still
-    converge, at a linear rate.
-
-    If a microscopic problem does not converge, its increment is cut (by 4,
-    down to 1e-6 of the macroscopic increment), then a ``RuntimeError`` is
-    raised. The cut is a fallback: the tangent then linearizes the last
-    sub-increment only, and the macroscopic stress is not a smooth function
-    of the strain where the cut switches on.
+    With an algorithmic microscopic tangent and a single substep, the
+    homogenized tangent linearizes the macroscopic stress response. If a
+    microscopic problem requires several substeps, the tangent linearizes
+    only the final substep. A cell that cannot converge above the minimum
+    substep size (1e-6 of the macro increment) rejects the macro trial.
 
     The outputs added to a microscopic problem are written once per converged
     macroscopic increment.
     """
 
-    def __init__(self, assemb, name=""):
+    def __init__(self, assemb, name="", *, micro_nr_options=None):
         if isinstance(assemb, str):
             assemb = Assembly.get_all()[assemb]
         super().__init__(name=name)
@@ -91,7 +76,9 @@ class FE2(Mechanical3D):
 
         self.list_problem = None
         self.use_elastic_lt = True
-        self.tol_nr = 0.05
+        self._micro_nr_options = {"tol": 0.05, "dt_increase_niter": 0}
+        if micro_nr_options is not None:
+            self._micro_nr_options.update(micro_nr_options)
 
     def initialize(self, assembly, pb):
         if self.list_problem is not None:
@@ -131,6 +118,7 @@ class FE2(Mechanical3D):
                 self.list_assembly[index],
                 name=f"_fe2_cell_{index}",
             )
+            micro_problem.set_nr_criterion(**self._micro_nr_options)
             self.list_problem.append(micro_problem)
             micro_problem.bc.add(
                 PeriodicBC(
@@ -164,8 +152,11 @@ class FE2(Mechanical3D):
             assembly.sv["TangentMatrix"] = assembly.sv["ElasticMatrix"].copy()
 
     def to_start(self, assembly, pb):
-        # the trial states are dropped by the next update
         self._has_trial = False
+        for index, micro_problem in enumerate(self.list_problem):
+            if self._committed[index] is not None:
+                micro_problem.time = pb.time
+                self._restore_state(index)
 
     def _save_state(self, index):
         """Return the committed state of a microscopic problem."""
@@ -173,8 +164,10 @@ class FE2(Mechanical3D):
         disp = micro_problem._U
         if not np.isscalar(disp):
             disp = disp.copy()
-        leaves = _leaf_assemblies(self.list_assembly[index])
-        return disp, [dict(getattr(leaf, "sv_start", {})) for leaf in leaves]
+        return disp, [
+            leaf.sv_start.copy() if hasattr(leaf, "sv_start") else None
+            for leaf in micro_problem.assembly.iter_leaf()
+        ]
 
     def _restore_state(self, index):
         """Bring a microscopic problem back to its last committed state."""
@@ -186,40 +179,10 @@ class FE2(Mechanical3D):
             return
         disp, list_sv = self._committed[index]
         micro_problem._U = disp if np.isscalar(disp) else disp.copy()
-        for leaf, sv in zip(_leaf_assemblies(self.list_assembly[index]), list_sv):
-            if hasattr(leaf, "sv_start"):
-                leaf.sv_start = dict(sv)
+        for leaf, sv in zip(micro_problem.assembly.iter_leaf(), list_sv):
+            if sv is not None:
+                leaf.sv_start = sv.copy()
         micro_problem.to_start()
-
-    def _solve_micro_increment(self, index, pb_macro):
-        """Load a microscopic problem from its committed state to the trial.
-
-        The increment is cut when the Newton-Raphson algorithm fails. The
-        sub-increments are committed in the microscopic problem (the state at
-        the last macroscopic commit is kept apart), the last one is not.
-        """
-        micro_problem = self.list_problem[index]
-        span = pb_macro.dtime if pb_macro.dtime > 0 else 1.0
-        micro_problem.t0 = pb_macro.time
-        micro_problem.tmax = pb_macro.time + span
-        done, step = 0.0, 1.0
-        while done < 1 - 1e-8:
-            step = min(step, 1 - done)
-            micro_problem.time = micro_problem.t0 + done * span
-            micro_problem.dtime = step * span
-            converged = micro_problem.solve_time_increment(tol_nr=self.tol_nr)[0]
-            if converged:
-                done += step
-                if done < 1 - 1e-8:
-                    micro_problem.set_start()
-                continue
-            micro_problem.to_start()
-            step *= 0.25
-            if step < 1e-6:
-                raise RuntimeError(
-                    "FE2: the microscopic problem of the integration point "
-                    f"{index} has not converged."
-                )
 
     def _update_pb(self, index, assembly_macro, pb_macro):
         strain = assembly_macro.sv["Strain"].asarray()[:, index]
@@ -227,21 +190,34 @@ class FE2(Mechanical3D):
         micro_problem = self.list_problem[index]
 
         print("\r", index + 1, "/", len(self.list_problem), end="")
+        span = pb_macro.dtime if pb_macro.dtime > 0 else 1.0
+        micro_problem.time = pb_macro.time
+        micro_problem.dtime = span
         self._restore_state(index)
         if self._strain_bc[index] is not None:
             micro_problem.bc.remove(self._strain_bc[index])
         self._strain_bc[index] = micro_problem.bc.add(
             "Dirichlet", "MeanStrain", strain, start_value=strain_start
         )
-        micro_problem.init_bc_start_value()
-        if not np.array_equal(strain, strain_start):
-            self._solve_micro_increment(index, pb_macro)
+        try:
+            micro_problem.nlsolve(
+                t0=pb_macro.time,
+                tmax=pb_macro.time + span,
+                dt=span,
+                dt_min=span * 1e-6,
+                print_info=0,
+                _trial=True,
+            )
+        except NonlinearConvergenceError as error:
+            raise NonlinearConvergenceError(
+                f"FE2: microscopic problem at integration point {index} did not converge."
+            ) from error
 
         # tangent matrix of the cell at its converged state
         micro_problem.update(compute="matrix", updateWeakForm=False)
         micro_problem._update_a()
         assembly_macro.sv["TangentMatrix"][:, :, index] = get_tangent_stiffness(
-            micro_problem.name
+            micro_problem
         )
 
         micro_assembly = self.list_assembly[index]

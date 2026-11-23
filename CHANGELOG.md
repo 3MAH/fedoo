@@ -106,14 +106,15 @@ semantic versioning.
 
 ### Changed
 
-- **``FE2`` has a ``tol_nr`` attribute** (default 0.05, the value formerly
-  written in the code) for the Newton-Raphson tolerance of the microscopic
-  problems. The time of a microscopic problem now follows the macroscopic
+- **``FE2`` accepts ``micro_nr_options``** for the microscopic Newton-Raphson
+  criterion, tolerance (default 0.05), and other existing solver settings.
+  The time of a microscopic problem now follows the macroscopic
   time (it restarted from 0 at each update), and the outputs added to a
   microscopic problem are written once per converged macroscopic increment
   instead of at every Newton-Raphson iteration. A cell that does not converge
-  is still cut (by 4, down to 1e-6 of the macroscopic increment) before a
-  ``RuntimeError`` is raised.
+  is cut by 4, down to 1e-6 of the macroscopic increment, before rejecting the
+  macroscopic trial. A positive-duration strain hold still advances the
+  microscopic material state.
 
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
