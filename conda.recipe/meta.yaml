@@ -35,6 +35,7 @@ test:
     - tests
   requires:
     - pytest
+    - hdf5plugin>=4
   commands:
     # Exclude documentation publishing checks.
     - pytest tests --ignore=tests/test_precomputed_records.py
