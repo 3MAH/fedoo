@@ -7,6 +7,18 @@ from fedoo.core.mechanical3d import MechanicalUMAT
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
 
 
+def _is_identity(DR):
+    """True if DR holds exact identity rotation(s), (3, 3) or (3, 3, n)."""
+    DR = np.asarray(DR)
+    if DR.shape[:2] != (3, 3) or DR.ndim > 3:
+        return False
+    if DR.ndim == 3:
+        if DR.shape[2] and not np.array_equal(DR[:, :, 0], np.eye(3)):
+            return False  # quick rejection of a finite-strain increment
+        return bool(np.all(DR == np.eye(3)[:, :, None]))
+    return np.array_equal(DR, np.eye(3))
+
+
 class ElastoPlasticity(MechanicalUMAT):
     r"""Elasto-plastic constitutive law with isotropic hardening.
 
@@ -236,74 +248,96 @@ class ElastoPlasticity(MechanicalUMAT):
         direction[3:] *= 2.0
         return direction
 
-    def _plastic_increment(self, equivalent_trial_stress, plasticity_old):
-        """Solve all active radial-return consistency equations together."""
+    def _plastic_increment(
+        self, equivalent_trial_stress, plasticity_old, initial_residual=None
+    ):
+        """Solve all active radial-return consistency equations together.
+
+        The residuals are only evaluated at the points still being bracketed
+        or iterated: each point follows the same iterations as if all the
+        points were solved together.
+        """
         equivalent_trial_stress = np.asarray(equivalent_trial_stress, dtype=float)
         plasticity_old = np.asarray(plasticity_old, dtype=float)
-        initial_residual = (
-            equivalent_trial_stress
-            - self.yield_stress
-            - self.hardening_function(plasticity_old)
-        )
+        if initial_residual is None:
+            initial_residual = (
+                equivalent_trial_stress
+                - self.yield_stress
+                - self.hardening_function(plasticity_old)
+            )
         lower_bound = np.zeros_like(initial_residual)
         upper_bound = initial_residual / (3.0 * self.shear_modulus)
 
-        def residual(plastic_increment):
+        def residual(plastic_increment, points):
             return (
-                equivalent_trial_stress
+                equivalent_trial_stress[points]
                 - 3.0 * self.shear_modulus * plastic_increment
                 - self.yield_stress
-                - self.hardening_function(plasticity_old + plastic_increment)
+                - self.hardening_function(plasticity_old[points] + plastic_increment)
             )
 
+        # Only the points expanded at the previous pass can still have a
+        # positive residual at their upper bound.
+        points = np.arange(len(upper_bound))
         for _ in range(self.max_return_mapping_iterations):
-            points_to_expand = residual(upper_bound) > 0
-            if not np.any(points_to_expand):
+            points = points[residual(upper_bound[points], points) > 0]
+            if not len(points):
                 break
-            upper_bound[points_to_expand] *= 2.0
+            upper_bound[points] *= 2.0
         else:
             raise RuntimeError("Unable to bracket every plastic multiplier.")
 
         plastic_increment = 0.5 * upper_bound
-        converged = np.zeros_like(plastic_increment, dtype=bool)
+        active = np.arange(len(plastic_increment))  # points not converged
 
         for _ in range(self.max_return_mapping_iterations):
-            value = residual(plastic_increment)
-            converged |= np.abs(value) <= self.return_mapping_tolerance
-            if np.all(converged):
+            increment = plastic_increment[active]
+            value = residual(increment, active)
+            unconverged = ~(np.abs(value) <= self.return_mapping_tolerance)
+            if not np.any(unconverged):
                 return plastic_increment
+            active = active[unconverged]
+            increment = increment[unconverged]
+            value = value[unconverged]
 
-            active = ~converged
-            positive_residual = active & (value > 0)
-            negative_residual = active & ~positive_residual
-            lower_bound[positive_residual] = plastic_increment[positive_residual]
-            upper_bound[negative_residual] = plastic_increment[negative_residual]
+            positive_residual = value > 0
+            lower_bound[active[positive_residual]] = increment[positive_residual]
+            upper_bound[active[~positive_residual]] = increment[~positive_residual]
+            lower, upper = lower_bound[active], upper_bound[active]
 
             hardening_slope = self.hardening_function_derivative(
-                plasticity_old + plastic_increment
+                plasticity_old[active] + increment
             )
             denominator = 3.0 * self.shear_modulus + hardening_slope
-            candidate = plastic_increment + value / denominator
+            candidate = increment + value / denominator
             invalid_candidate = (
                 ~np.isfinite(candidate)
                 | (denominator <= 0)
-                | (candidate <= lower_bound)
-                | (candidate >= upper_bound)
+                | (candidate <= lower)
+                | (candidate >= upper)
             )
             candidate[invalid_candidate] = 0.5 * (
-                lower_bound[invalid_candidate] + upper_bound[invalid_candidate]
+                lower[invalid_candidate] + upper[invalid_candidate]
             )
-            plastic_increment[active] = candidate[active]
+            plastic_increment[active] = candidate
 
-        unconverged_residual = np.max(np.abs(residual(plastic_increment)[~converged]))
+        unconverged_residual = np.max(
+            np.abs(residual(plastic_increment[active], active))
+        )
         raise RuntimeError(
             "The radial-return algorithm did not converge after "
             f"{self.max_return_mapping_iterations} iterations; maximum "
             f"residual is {unconverged_residual:.6g}."
         )
 
-    def _integrate(self, total_strain, plasticity_old, plastic_strain_old):
-        """Integrate all material points from their committed state."""
+    def _integrate(
+        self, total_strain, plasticity_old, plastic_strain_old, hardening_old=None
+    ):
+        """Integrate all material points from their committed state.
+
+        ``hardening_old`` optionally gives the hardening stress at
+        ``plasticity_old`` when the caller has already evaluated it.
+        """
         strain = self._as_point_array(total_strain)
         plastic_strain_old = self._as_point_array(plastic_strain_old)
         plasticity_old = np.asarray(plasticity_old, dtype=float).reshape(-1)
@@ -314,11 +348,9 @@ class ElastoPlasticity(MechanicalUMAT):
         elastic_matrix = np.asarray(self.get_elastic_matrix(), dtype=float)
         trial_stress = elastic_matrix @ (strain - plastic_strain_old)
         equivalent_trial_stress = np.asarray(StressTensorList(trial_stress).von_mises())
-        trial_yield = (
-            equivalent_trial_stress
-            - self.yield_stress
-            - self.hardening_function(plasticity_old)
-        )
+        if hardening_old is None:
+            hardening_old = self.hardening_function(plasticity_old)
+        trial_yield = equivalent_trial_stress - self.yield_stress - hardening_old
         plastic_points = trial_yield > self.return_mapping_tolerance
 
         stress = trial_stress.copy()
@@ -330,6 +362,7 @@ class ElastoPlasticity(MechanicalUMAT):
             plastic_increment = self._plastic_increment(
                 equivalent_trial_stress[plastic_points],
                 plasticity_old[plastic_points],
+                trial_yield[plastic_points],
             )
             plasticity[plastic_points] += plastic_increment
 
@@ -468,7 +501,11 @@ class ElastoPlasticity(MechanicalUMAT):
         plasticity_old = statev_start[0]
         plastic_strain_old = statev_start[1:7]
 
-        plastic_strain_old = rotate_voigt(plastic_strain_old, DR, "strain")
+        if _is_identity(DR):
+            # no transport, e.g. in small strain
+            plastic_strain_old = np.array(plastic_strain_old, dtype=float)
+        else:
+            plastic_strain_old = rotate_voigt(plastic_strain_old, DR, "strain")
 
         total_strain = strain + dstrain
         initialization_without_hardening = (
@@ -482,10 +519,12 @@ class ElastoPlasticity(MechanicalUMAT):
             plasticity = np.asarray(plasticity_old, dtype=float).copy()
             tangent = np.repeat(elastic_matrix[:, :, None], n_points, axis=2)
         else:
+            hardening_start = self.hardening_function(plasticity_old)
             stress, plastic_strain, plasticity, tangent = self._integrate(
                 total_strain,
                 plasticity_old,
                 plastic_strain_old,
+                hardening_start,
             )
 
         self._current_stress = stress
@@ -514,7 +553,6 @@ class ElastoPlasticity(MechanicalUMAT):
         if initialization_without_hardening:
             hardening_work = np.zeros_like(plastic_increment)
         else:
-            hardening_start = self.hardening_function(plasticity_old)
             hardening_end = self.hardening_function(plasticity)
             hardening_work = 0.5 * (hardening_start + hardening_end) * plastic_increment
 

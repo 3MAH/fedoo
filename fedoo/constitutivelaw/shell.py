@@ -506,6 +506,10 @@ def _tangent_array(tangent, n_points):
     return dense
 
 
+# (generalized strain, material strain) indices of the entries of _strain_matrix
+_STRAIN_MATRIX_ENTRIES = ((0, 0), (1, 1), (2, 3), (3, 0), (4, 1), (5, 3))
+
+
 def _strain_matrix(z):
     """Map generalized strains to epsilon0 - z*kappa at thickness ``z``.
 
@@ -519,6 +523,25 @@ def _strain_matrix(z):
     matrix[3, 2] = 1
     matrix[3, 5] = -z
     return matrix
+
+
+def _add_section_tangent(shell_tangent, material_tangent, z, weight):
+    """Add ``weight * S.T @ material_tangent @ S`` with ``S = _strain_matrix(z)``.
+
+    Each generalized strain has one material strain component in S: the 36
+    non-zero products are added, in the order of the einsum they replace. A
+    non-finite tangent keeps the einsum, which spreads it to every term.
+    """
+    matrix = _strain_matrix(z)
+    if not np.all(np.isfinite(material_tangent)):
+        shell_tangent += weight * np.einsum(
+            "ia,ijp,jb->abp", matrix, material_tangent, matrix
+        )
+        return
+    entries = [(a, i, matrix[i, a]) for a, i in _STRAIN_MATRIX_ENTRIES]
+    for a, i, coef_a in entries:
+        for b, j, coef_b in entries:
+            shell_tangent[a, b] += weight * ((coef_a * material_tangent[i, j]) * coef_b)
 
 
 class ShellHomogeneousNonLinear(ShellBase):
@@ -654,12 +677,8 @@ class ShellHomogeneousNonLinear(ShellBase):
                 index * self._n_shell_points,
                 (index + 1) * self._n_shell_points,
             )
-            strain_matrix = _strain_matrix(z)
-            shell_tangent += weight * np.einsum(
-                "ia,ijp,jb->abp",
-                strain_matrix,
-                material_tangent[:, :, point_slice],
-                strain_matrix,
+            _add_section_tangent(
+                shell_tangent, material_tangent[:, :, point_slice], z, weight
             )
 
         shell_tangent[6:8, 6:8] = (
@@ -953,12 +972,8 @@ class ShellLaminateNonLinear(ShellBase):
                     point * self._n_shell_points,
                     (point + 1) * self._n_shell_points,
                 )
-                strain_matrix = _strain_matrix(z)
-                shell_tangent += weight * np.einsum(
-                    "ia,ijp,jb->abp",
-                    strain_matrix,
-                    material_tangent[:, :, point_slice],
-                    strain_matrix,
+                _add_section_tangent(
+                    shell_tangent, material_tangent[:, :, point_slice], z, weight
                 )
 
             shell_tangent[6:8, 6:8] += (

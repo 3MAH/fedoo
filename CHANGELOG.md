@@ -97,6 +97,18 @@ semantic versioning.
   rotations 1e-14). On 400 000 points: F and det F 0.017 s -> 0.005 s,
   matrix to rotation vector 0.22 s -> 0.009 s (4 threads).
 
+- **`ElastoPlasticity`: cheaper radial return.** The residual and the
+  hardening slope are only evaluated at the points still bracketed or not
+  converged (they were evaluated at every plastic point at every iteration),
+  the hardening at the start of the increment is computed once, and the start
+  plastic strain is not rotated when the rotation increment is exactly the
+  identity (small strain). Each point follows the same iterations: results are
+  unchanged bit for bit.
+- **Nonlinear shells: section tangent without dense contraction.**
+  `ShellHomogeneousNonLinear` and `ShellLaminateNonLinear` add the 36 non-zero
+  products of `S.T @ C @ S` at each thickness point in place of an einsum over
+  the 6 x 6 x 8 x 8 terms. Results are unchanged bit for bit.
+
 - **`set_solver(symmetric=None)` is the default** (was `False`): with the
   direct solver of python-mumps, a symmetric-indefinite LDL^T factorization
   is used when every assembly of the problem is assembled with
