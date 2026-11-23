@@ -6,6 +6,8 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
 ### Added
 
 - Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
@@ -18,16 +20,20 @@ semantic versioning.
   and statev layout is the plain name's, the full name goes to ``sim.umat``.
   ``test_finite_strain_tangent_consistency`` asks ``ZENER_closed`` (not ``ZENER``,
   served by the modular engine since simcoon 2.4) to refuse the total formulation.
-- Independent local-frame overlays in DataSet.plot via local_frame and
-  one-based local_frame_axis, with size, density, placement and legend controls.
+- Independent local-frame overlays in `DataSet.plot` via `show_local_frame`,
+  with frame selection through `set_current_local_frame`, one-based axis
+  selection through `local_frame_axis`, and density, placement and legend
+  controls through `local_frame_options`. `show_local_frame` accepts a boolean
+  or a size expressed as a percentage of the mesh bounding-box diagonal.
   The viewer uses the same plotting implementation, including mixed-mesh
   visibility. Frame matrix components remain available as ordinary scalar plots
   for matrix, quaternion and rotation-vector inputs.
 - Metadata-driven local-frame fields for arbitrary names (`type: local_frame`),
   with automatic tagging of shell/beam outputs and explicitly requested
   MaterialLocalFrame output for supported mechanical constitutive laws.
-- Rotation-vector FDH5 encoding (`local_frame="rotvec"`, radians), plus shape
-  inference for tagged matrix/quaternion/rotvec inputs. Files record encoding
+- Rotation-vector FDH5 encoding (`fdh5_options={"local_frame": "rotvec"}`,
+  radians), plus shape inference for tagged matrix/quaternion/rotvec inputs.
+  Files record encoding
   explicitly and restore ordinary matrices on reading.
 - Public local frames in the viewer field list with Whole frame / Local 1/2/3
   components, and a frame-field selector for overlays including private frames.
@@ -36,7 +42,7 @@ semantic versioning.
   compression, floating-point precision, lossless integer packing and local-frame encoding.
 - Compact quaternion local frames with repeated Gauss-point frames stored once
   per element, transparent matrix reconstruction, and coloured basis-vector
-  display with axis, placement, size and density controls in Options > Plot.
+  display with axis, placement, size and density controls in Options > Local frames.
 - Expandable vector/tensor fields in the Object inspector, with direct component
   selection using the same labels and invariants as the viewer field controls.
 - Viewer node-set management, conversion between node and element sets, and
@@ -54,9 +60,9 @@ semantic versioning.
   workspace Problems without solving. Live Problems support boundary-condition
   inspection and editing; stored modal/buckling modes use the iteration controls.
   FDH5 export is a snapshot of the selected state or mode, not a solver restart.
-- Optional lossless Zstandard compression for FDH5 through `compressed="zstd"`
-  or `CompressionConfig`, and a `fedoo[zstd]` dependency group. The viewer's
-  Save as dialog offers uncompressed, gzip and Zstandard output with level
+- Optional lossless Zstandard compression for FDH5 through
+  `fdh5_options={"compression": "zstd"}`, and a `fedoo[zstd]` dependency group.
+  The viewer's Save as dialog offers uncompressed, gzip and Zstandard output with level
   selection; Zstandard readers and writers require `hdf5plugin`.
 - Optional current-time annotation under Options > Plot, disabled by default.
 - Automatic consistent tangents with `consistent_tangent=None` for supported
@@ -69,15 +75,18 @@ semantic versioning.
   (positive integer, default 4) to control stagnation-based early rejection
   independently of the tangent-switch and adaptive-stiffness thresholds.
 - FDH5 compression selection through `add_output` and `DataSet.to_fdh5`:
-  `True` uses gzip level 4, `False` disables compression, and integers 0-9
-  select the gzip level. Invalid settings and conflicting settings for
-  registrations sharing an output file are rejected. Appending preserves
+  `fdh5_options` selects the codec and `compression_level` (0-9 for gzip).
+  `compressed=None` uses the configured storage defaults; `False` disables
+  compression, while `True` uses the configured codec or falls back to gzip
+  level 4 if compression is disabled in those defaults. Invalid settings and
+  conflicting settings for registrations sharing an output file are rejected. Appending preserves
   existing datasets and applies the selected compression to new datasets.
 - `Simcoon` and `Simcoon.from_modular` accept the keyword-only options `ncp`
   (`"fischer_burmeister"` default, or `"min"`) and `integrator`
-  (`"cutting_plane"` default, or `"closest_point"`), forwarded to
-  `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
-  to `None`: `1` (continuum) as before, or `2` with
+  (`None` by default, or `"default"`, `"cutting_plane"`, `"closest_point"`).
+  Both are available as attributes; `None` omits the integrator argument to
+  `simcoon.umat`, preserving Simcoon's default, while explicit choices are
+  forwarded. `tangent_mode` now defaults to `None`: `1` (continuum) as before, or `2` with
   `integrator="closest_point"`, which only returns its algorithmic operator.
 - `BeamNonLinear`: nonlinear multifiber beam section. A private copy of a
   3D material law (e.g. a Simcoon plasticity law) is evaluated under uniaxial
@@ -112,9 +121,6 @@ semantic versioning.
   the time step, instead of zero. Fewer law evaluations per point (plane-stress plate,
   EPICP / EPCHA: -13 % / -20 % on the whole run); results move within the tolerance
   of the material-point Newton (1e-10).
-- Simplify DataSet frame display to set_current_local_frame, show_local_frame
-  (boolean or mesh-size percentage), local_frame_axis and local_frame_options
-  (max_frames, gauss_points, legend). The viewer uses the same API.
 - Automatic geometric frames for shells in 3D and lines in 2D/3D when no saved
   frame is available; 2D spaces display two axes. DataSet show_normals uses
   geometric last axes and percentage sizing. Mesh quick-view methods are unchanged.
@@ -130,9 +136,8 @@ semantic versioning.
 - FDH5 result fields now default to float32 storage; coordinates, scalar outputs
   and metadata preserve precision. Use float_dtype=None to preserve result precision.
   Integer packing defaults to a 32-bit minimum and preserves signedness.
-- Released boolean compressed arguments remain supported; unpublished codec/level
-  shortcuts move to fdh5_options. Explicit True falls back to gzip 4 when the
-  configured codec is None. Existing matrix-frame files remain readable.
+- Boolean `compressed` arguments remain supported; codec and level selection
+  use `fdh5_options`. Existing matrix-frame files remain readable.
 - The Object inspector is visible by default and docks only on the left or
   right of a separate result-view
   area, so arranging views does not reposition it. It starts at minimum width;
@@ -146,10 +151,10 @@ semantic versioning.
 - The Object inspector shows generated submesh selections only as mesh entries,
   avoiding duplicate element-set entries. Generated submesh sets remain in the
   set manager and are excluded from FDH5 exports; user-created sets are retained.
-- `add_output` now defaults to `compressed=True`. FDH5 retains its previous
-  default gzip level 4, but honors explicit `False` and integer levels instead
-  of ignoring the option. Other formats supporting the boolean compression
-  option now also default to compressed output.
+- `add_output` now defaults to `compressed=None`, using the configured FDH5
+  storage defaults (gzip level 4 initially) and honoring explicit `False`.
+  Other formats supporting the boolean compression option default to
+  compressed output when the argument is omitted.
 - Automatic beam/shell tangent switching tracks significant improvement
   against a reference error so oscillations do not conceal stagnation. Switching
   resets the progress counters, and adaptive stiffness gets an opportunity to
@@ -165,6 +170,8 @@ semantic versioning.
   and `tests/test_poromech_finite_strain.py` runs at 20 % compression.
 - Require `simcoon>=2.4`. Plane-stress tangents are already condensed by
   Simcoon and are no longer condensed a second time by fedoo.
+- Exclude `ipctk==1.6.1` on Linux because its wheel can crash on CPUs without
+  AVX-512. Other platforms retain the `ipctk>=1.6` requirement.
 - Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
   all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
   `DeprecationWarning`, and will raise an `AttributeError` in a future
@@ -172,7 +179,7 @@ semantic versioning.
   `material.corate = ...` has always been silently ignored.
 - `Simcoon` / `Simcoon.from_modular` docstrings document `tangent_mode` with
   the simcoon >= 2.0 numbering: 0 elastic, 1 continuum (fedoo default),
-  2 algorithmic tangent of the convex cutting plane return mapping (simcoon
+  2 algorithmic tangent of the integrator used (simcoon
   default). Simcoon 2.3 no longer accepts mode 3: the integration algorithm
   is a separate Simcoon setting. The numbering of
   simcoon < 2.0 differs (0 continuum, 1 algorithmic).
@@ -258,6 +265,8 @@ semantic versioning.
 
 ### Fixed
 
+- Release Pardiso's native factorization memory when factorization reuse is
+  disabled or its context is replaced.
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
   spherical shell compression. Element expressions retain the original mesh's
