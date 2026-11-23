@@ -275,6 +275,12 @@ semantic versioning.
 
 ### Fixed
 
+- **`DiffOp * DiffOp` written as real * virtual**: the term indices were swapped,
+  so the coefficients of the cross terms were transposed when both operators had
+  the same number of terms, and the product raised `IndexError` otherwise. The
+  product now gives the same form as virtual * real. No fedoo weak form writes
+  the product in that order; user weak forms that did get different (corrected)
+  matrices.
 - `set_solver(..., symmetric=True)` with python-mumps 0.0.6, whose `Context`
   has no `sym` argument, raised `NotImplementedError`: the symmetry is now
   given with the matrix (`set_matrix(A, symmetric=True)`).

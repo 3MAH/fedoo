@@ -186,8 +186,8 @@ class DiffOp:
                         op_vir.append(self.op_vir[jj])
                         coef.append(_mul_coef(A.coef[ii], self.coef[jj]))
                     elif A.op[ii] == 1 and self.op_vir[jj] == 1:  # si c'est l'inverse
-                        op.append(self.op[ii])
-                        op_vir.append(A.op_vir[jj])
+                        op.append(self.op[jj])
+                        op_vir.append(A.op_vir[ii])
                         coef.append(_mul_coef(A.coef[ii], self.coef[jj]))
                     else:
                         raise NameError("Impossible operation")

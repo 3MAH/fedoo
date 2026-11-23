@@ -104,6 +104,31 @@ def test_mul_matches_sum_of_single_terms():
     assert sum(c is arr for c in res.coef) == 2
 
 
+def _terms(wf):
+    """Coefficient of each (trial operator, test operator) pair."""
+    return {
+        (op.u_name, op.x, vir.u_name, vir.x): coef
+        for op, vir, coef in zip(wf.op, wf.op_vir, wf.coef)
+    }
+
+
+def test_real_times_virtual_is_the_same_form():
+    space = fd.ModelingSpace("3D")
+    space.new_variable("DispX")
+    space.new_variable("DispY")
+    real = space.derivative("DispX", "X") * 2.0 + space.derivative("DispY", "Y") * 3.0
+    virtual = (
+        space.variable("DispX").virtual * 5.0 + space.variable("DispY").virtual * 7.0
+    )
+    assert _terms(real * virtual) == _terms(virtual * real)
+    assert _terms(real * virtual)[("DispX", 0, "DispY", 0)] == 14.0
+
+    # operators of different lengths
+    real = real + space.variable("DispX") * 11.0
+    assert len(real * virtual) == 6
+    assert _terms(real * virtual) == _terms(virtual * real)
+
+
 def test_mul_refuses_two_real_operators():
     space = fd.ModelingSpace("2D")
     space.new_variable("DispX")
