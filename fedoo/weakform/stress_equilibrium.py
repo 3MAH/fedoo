@@ -170,6 +170,9 @@ class StressEquilibrium(WeakFormBase):
 
         DiffOp = None
         if assembly._nlgeom == "TL":
+            if isinstance(H, np.ndarray) and H.ndim == 3:
+                # H[i][j] is strided in a Fortran-ordered (6, 6, n) tangent
+                H = np.ascontiguousarray(H)
             DiffOp = _tangent_op(eps, H)
         if DiffOp is None:
             sigma = [

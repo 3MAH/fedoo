@@ -100,6 +100,8 @@ semantic versioning.
   Mac). The F-bar total Lagrangian form and the poromechanics forms built on
   ``StressEquilibrium`` benefit too; updated Lagrangian and small strain are
   not concerned.
+  A tangent given as a Fortran-ordered ``(6, 6, n)`` array (simcoon laws) is
+  read from a C-ordered copy, where each component is contiguous.
 
 - **Requires simcoon >= 2.6** (was 2.3). Finite strain kinematics and shell / beam
   rotations go through the simcoon 2.6 batch calls (`G_UdX_to_F`, `rotvec_to_matrix`,

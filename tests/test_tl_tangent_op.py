@@ -131,7 +131,7 @@ def test_tl_weak_equation_matches_expansion(monkeypatch):
     mesh = fd.mesh.box_mesh(nx=3, ny=3, nz=3, elm_type="hex8")
     material = fd.constitutivelaw.ElasticIsotrop(1.0, 0.3)
     wf = fd.weakform.StressEquilibrium(material, nlgeom="TL")
-    wf.assume_sym = False
+    wf.assembly_options["assume_sym"] = False
     assembly = fd.Assembly.create(wf, mesh)
     pb = fd.problem.NonLinear(assembly)
     pb.initialize()
