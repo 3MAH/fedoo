@@ -1,4 +1,5 @@
 import sys
+from contextlib import contextmanager
 
 import numpy as np
 from scipy import sparse
@@ -16,9 +17,13 @@ try:  # optional compiled kernels, used when numba is installed
     from fedoo.core._numba_kernels import (
         elementary_operator_values as _elementary_operator_values_numba,
     )
+    from fedoo.core._numba_kernels import take as _take_numba
+    from fedoo.core._numba_kernels import csr_matvec_multi as _csr_matvec_multi_numba
     import numba as _numba
 except ImportError:
     _elementary_operator_values_numba = None
+    _take_numba = None
+    _csr_matvec_multi_numba = None
     _gauss_sum_atb_numba = None
     _gather_sum_numba = None
     _csr_matvec_numba = None
@@ -56,9 +61,16 @@ def _performance_cores():
 _DEFAULT_NUMBA_THREADS = None
 
 
-def _set_numba_threads():
+# work (about the number of values read) given to each thread of a numba
+# kernel at least: starting a thread costs more than a smaller share
+_THREAD_GRAIN = 20000
+
+
+def _numba_thread_count(work=None):
     """Number of threads of the numba kernels: fedoo's N_THREADS if set, else
-    the performance cores (hybrid Apple chips) or numba's default."""
+    the performance cores (hybrid Apple chips) or numba's default; for a
+    small work, fewer threads (one per _THREAD_GRAIN). The results of the
+    kernels do not depend on the number of threads."""
     global _DEFAULT_NUMBA_THREADS
     max_threads = _numba.config.NUMBA_NUM_THREADS
     if base.N_THREADS > 0:
@@ -67,7 +79,22 @@ def _set_numba_threads():
         if _DEFAULT_NUMBA_THREADS is None:
             _DEFAULT_NUMBA_THREADS = _performance_cores() or max_threads
         n_threads = _DEFAULT_NUMBA_THREADS
-    _numba.set_num_threads(min(n_threads, max_threads))
+    if work is not None:
+        n_threads = min(n_threads, max(1, int(work) // _THREAD_GRAIN))
+    return min(n_threads, max_threads)
+
+
+@contextmanager
+def _numba_threads(work=None):
+    """Context of a numba kernel call with _numba_thread_count(work) threads.
+    numba's thread count (per calling thread) is restored afterwards, also
+    on an exception, so that the user's own numba code keeps its threads."""
+    previous = _numba.get_num_threads()
+    _numba.set_num_threads(_numba_thread_count(work))
+    try:
+        yield
+    finally:
+        _numba.set_num_threads(previous)
 
 
 def _csr_matvec(M, x):
@@ -80,12 +107,39 @@ def _csr_matvec(M, x):
         or M.dtype != np.float64
         or np.ndim(x) != 1
         or np.asarray(x).dtype != np.float64
+        or len(x) != M.shape[1]  # the kernel does not check: scipy raises
     ):
         return M @ x
     out = np.empty(M.shape[0])
-    _set_numba_threads()
-    _csr_matvec_numba(M.indptr, M.indices, M.data, np.ascontiguousarray(x), out)
+    with _numba_threads(M.nnz):
+        _csr_matvec_numba(M.indptr, M.indices, M.data, np.ascontiguousarray(x), out)
     return out
+
+
+def _csr_matvec_multi(M, x_list):
+    """[M @ x for x in x_list] for a csr matrix M, the matrix being read once
+    (numba): the values of _csr_matvec. None without numba, or if M or the
+    vectors are not float64 (csr)."""
+    if (
+        _csr_matvec_multi_numba is None
+        or _csr_matvec_numba is None  # same values as _csr_matvec
+        or not sparse.issparse(M)
+        or M.format != "csr"
+        or M.dtype != np.float64
+        or any(
+            np.ndim(x) != 1 or np.asarray(x).dtype != np.float64 or len(x) != M.shape[1]
+            for x in x_list
+        )
+    ):
+        return None
+    if not x_list:
+        return []
+    x = np.array(x_list)  # (k, n), C contiguous
+    # separate arrays: the results are independent, as those of _csr_matvec
+    out = tuple(np.empty(M.shape[0]) for _ in x_list)
+    with _numba_threads(M.nnz * len(x_list)):
+        _csr_matvec_multi_numba(M.indptr, M.indices, M.data, x, out)
+    return list(out)
 
 
 def _csr_rmatvec(M, x):
@@ -95,13 +149,32 @@ def _csr_rmatvec(M, x):
     operators of an assembly, rebuilt when the mesh changes)."""
     if _csr_matvec_numba is None or not sparse.issparse(M) or M.format != "csr":
         return M.T @ x
+    return _csr_matvec(_transposed(M), x)
+
+
+def _csr_rmatvec_multi(M, x_list):
+    """[M.T @ x for x in x_list] (see _csr_rmatvec), the transposed matrix
+    being read once: the values of _csr_rmatvec. None if not applicable."""
+    if _csr_matvec_numba is None or not sparse.issparse(M) or M.format != "csr":
+        return None
+    return _csr_matvec_multi(_transposed(M), x_list)
+
+
+def _transposed(M):
+    """The transposed csr matrix of the csr matrix M, kept on M."""
     transposed = getattr(M, "_fedoo_transposed", None)
     if transposed is None:
         pattern = getattr(M, "_fedoo_pattern", None)
         if pattern is not None:
             perm_t, indices_t, indptr_t = pattern.transposed()
+            if _take_numba is not None and M.data.dtype == np.float64:
+                data_t = np.empty(len(perm_t))
+                with _numba_threads(len(perm_t)):
+                    _take_numba(M.data, perm_t, data_t)
+            else:
+                data_t = M.data[perm_t]
             transposed = sparse.csr_matrix(
-                (M.data[perm_t], indices_t, indptr_t),
+                (data_t, indices_t, indptr_t),
                 shape=(M.shape[1], M.shape[0]),
                 copy=False,
             )
@@ -109,7 +182,7 @@ def _csr_rmatvec(M, x):
             transposed = M.T.tocsr()
             transposed.sort_indices()
         M._fedoo_transposed = transposed
-    return _csr_matvec(transposed, x)
+    return transposed
 
 
 class _CsrPattern:
@@ -246,14 +319,14 @@ def _gauss_sum_atb(coefs, a_list, b, out=None):
         accumulate = out is not None
         if out is None:
             out = np.empty((b.shape[1], a_list[0].shape[2], b.shape[2]))
-        _set_numba_threads()
-        _gauss_sum_atb_numba(
-            tuple(kernel_coefs),
-            tuple(kernel_a),
-            np.ascontiguousarray(b),
-            out,
-            accumulate,
-        )
+        with _numba_threads(b.size * a_list[0].shape[2] * 4):
+            _gauss_sum_atb_numba(
+                tuple(kernel_coefs),
+                tuple(kernel_a),
+                np.ascontiguousarray(b),
+                out,
+                accumulate,
+            )
         return out
     coef_a = 0
     for coef, a in zip(coefs, a_list):
@@ -627,28 +700,28 @@ class _BlocSparse:
         for o, (row_bloc, col_bloc) in enumerate(blocs):
             if self.data[row_bloc][col_bloc] is not None:
                 out[o] = self.data[row_bloc][col_bloc]
-        _set_numba_threads()
-        # coefficient parts, weights and ops: float64 arrays alive during the call
-        _gauss_sum_atb_jobs_numba(
-            np.array(coef_ptr, dtype=np.int64),
-            np.array([p.ctypes.data for p in parts], dtype=np.int64),
-            np.array(part_stride, dtype=np.int64),
-            np.array(
-                [0 if w is None else w.ctypes.data for w in coef_weight],
-                dtype=np.int64,
-            ),
-            np.array([op.ctypes.data for op in ops], dtype=np.int64),
-            n_gp,
-            n_elm,
-            n,
-            np.array(job_out, dtype=np.int64),
-            np.array(job_b, dtype=np.int64),
-            np.array(job_acc, dtype=np.bool_),
-            np.array(term_ptr, dtype=np.int64),
-            np.array(term_a, dtype=np.int64),
-            np.array(term_coef, dtype=np.int64),
-            out,
-        )
+        with _numba_threads(size * n * len(job_out) * 4):
+            # coefficient parts, weights and ops: float64 arrays alive during the call
+            _gauss_sum_atb_jobs_numba(
+                np.array(coef_ptr, dtype=np.int64),
+                np.array([p.ctypes.data for p in parts], dtype=np.int64),
+                np.array(part_stride, dtype=np.int64),
+                np.array(
+                    [0 if w is None else w.ctypes.data for w in coef_weight],
+                    dtype=np.int64,
+                ),
+                np.array([op.ctypes.data for op in ops], dtype=np.int64),
+                n_gp,
+                n_elm,
+                n,
+                np.array(job_out, dtype=np.int64),
+                np.array(job_b, dtype=np.int64),
+                np.array(job_acc, dtype=np.bool_),
+                np.array(term_ptr, dtype=np.int64),
+                np.array(term_a, dtype=np.int64),
+                np.array(term_coef, dtype=np.int64),
+                out,
+            )
         for o, (row_bloc, col_bloc) in enumerate(blocs):
             self.data[row_bloc][col_bloc] = out[o]
 
@@ -960,13 +1033,13 @@ class _BlocSparse:
             self._gather_cache[layout] = structure
         src, ptr, indices, indptr = structure
         data = np.empty(len(indices))
-        _set_numba_threads()
-        _gather_sum_numba(
-            tuple(np.ascontiguousarray(s).reshape(-1) for s in sources),
-            src,
-            ptr,
-            data,
-        )
+        with _numba_threads(len(src)):
+            _gather_sum_numba(
+                tuple(np.ascontiguousarray(s).reshape(-1) for s in sources),
+                src,
+                ptr,
+                data,
+            )
         res = sparse.csr_matrix(
             (data, indices, indptr),
             shape=(

@@ -1,4 +1,5 @@
 from copy import copy
+from numbers import Number
 
 import numpy as np
 from scipy import sparse
@@ -8,12 +9,14 @@ from fedoo.core._sparsematrix import (
     _WeightedCoef,
     _coo_to_csr,
     _csr_matvec,
+    _csr_matvec_multi,
     _csr_rmatvec,
+    _csr_rmatvec_multi,
 )
 from fedoo.core._sparsematrix import _BlocSparse as BlocSparse
 from fedoo.core.assembly_sum import AssemblySum
 from fedoo.core.base import AssemblyBase
-from fedoo.core.diffop import _mul_coef
+from fedoo.core.diffop import DiffOp, _Derivative, _mul_coef
 from fedoo.core.mesh import Mesh
 from fedoo.core.weakform import WeakFormBase, _AssemblyOptions, WeakFormSum
 from fedoo.lib_elements.element_list import (
@@ -23,6 +26,51 @@ from fedoo.lib_elements.element_list import (
 )
 from fedoo.util.localframe import as_local_frame
 from fedoo.util.voigt_tensors import StrainTensorList, StressTensorList
+
+
+def _transposed_products(terms):
+    """Matvir.T @ values for the (Matvir, values, ...) terms, the terms with
+    the same operator computed together (see _csr_rmatvec_multi); None for a
+    term left to the term by term computation of assemble_global_mat."""
+    products = [None] * len(terms)
+    groups = {}  # id(Matvir) -> (Matvir, [term index])
+    for k, term in enumerate(terms):
+        groups.setdefault(id(term[0]), (term[0], []))[1].append(k)
+    for matrix, indices in groups.values():
+        if len(indices) < 2:
+            continue
+        try:
+            results = _csr_rmatvec_multi(matrix, [terms[k][1] for k in indices])
+        except Exception:
+            # term by term, as before (where an error leaves the term out)
+            continue
+        if results is not None:
+            for k, res in zip(indices, results):
+                products[k] = res
+    return products
+
+
+_LOCAL_DOF_COLS = {}  # (n_elements, n_elm_gp, n_elm_nodes) -> col, the last few
+
+
+def _local_dof_col(n_elements, n_elm_gp, n_elm_nodes):
+    """Column (local dof e + node * n_elements) of the coo entries of the
+    elementary operators with a change of basis. The same array for the same
+    sizes, so that its conversion to csr is cached (see _coo_to_csr)."""
+    key = (n_elements, n_elm_gp, n_elm_nodes)
+    col = _LOCAL_DOF_COLS.get(key)
+    if col is None:
+        col = np.empty((n_elements, n_elm_gp, n_elm_nodes))
+        col[:] = (
+            np.arange(n_elements).reshape((-1, 1, 1))
+            + np.arange(n_elm_nodes).reshape((1, 1, -1)) * n_elements
+        )
+        col = col.reshape(-1)
+        col.flags.writeable = False
+        if len(_LOCAL_DOF_COLS) >= 8:
+            _LOCAL_DOF_COLS.pop(next(iter(_LOCAL_DOF_COLS)))
+        _LOCAL_DOF_COLS[key] = col
+    return col
 
 
 class Assembly(AssemblyBase):
@@ -65,6 +113,9 @@ class Assembly(AssemblyBase):
     # Associated-variable ranks depend on both the element interpolation and
     # the ModelingSpace in which those variables were declared.
     _saved_associated_variables = {}
+    # index of a space coordinate among the mesh coordinates (see
+    # _mesh_coordinate_index)
+    _saved_coordinate_index = {}
 
     def __init__(self, weakform, mesh="", elm_type="", name="", **kargs):
         if isinstance(weakform, str):
@@ -409,6 +460,7 @@ class Assembly(AssemblyBase):
                     assume_sym=self.assume_sym,
                 )
                 listMatvir = listCoef_PG = None
+                vector_terms = []  # (Matvir, coef, var_vir, coef_vir) of VV
 
                 sum_coef = (
                     False  # bool that indicate if operator are the same and can be sum
@@ -533,14 +585,12 @@ class Assembly(AssemblyBase):
                     if op_is_one[ii]:  # only virtual operator -> compute a vector
                         if np.isscalar(VV):  # VV = 0
                             VV = np.zeros(n_dof)
+                        # the products are computed after the loop, in this order
                         values = coef_PG.values()
                         for i in range(len(Matvir)):
-                            try:
-                                VV[sl[var_vir[i]]] -= _mul_coef(
-                                    coef_vir[i], _csr_rmatvec(Matvir[i], values)
-                                )
-                            except:
-                                pass
+                            vector_terms.append(
+                                (Matvir[i], values, var_vir[i], coef_vir[i])
+                            )
 
                     else:  # virtual and real operators -> compute a matrix
                         coef = [1]
@@ -580,6 +630,19 @@ class Assembly(AssemblyBase):
                                     )
                             listMatvir = None
                             listCoef_PG = None
+
+                # VV[sl[var_vir]] -= coef_vir * Matvir.T @ coef, in the order of
+                # the terms; the products with the same operator together
+                products = _transposed_products(vector_terms)
+                for (Matvir_i, values, var_vir_i, coef_vir_i), product in zip(
+                    vector_terms, products
+                ):
+                    try:
+                        if product is None:
+                            product = _csr_rmatvec(Matvir_i, values)
+                        VV[sl[var_vir_i]] -= _mul_coef(coef_vir_i, product)
+                    except:
+                        pass
 
             if compute != "vector":
                 if use_change_of_basis:
@@ -705,7 +768,6 @@ class Assembly(AssemblyBase):
             for nameVector in self.space.list_vectors():
                 # if compute_mat_change_of_basis == False and len(self.space.get_vector(nameVector))>1:
                 if compute_mat_change_of_basis == False:
-                    range_n_elm_nodes = np.arange(n_elm_nodes)
                     compute_mat_change_of_basis = True
                     nvar = self.space.nvar
                     listGlobalVector = []
@@ -749,64 +811,90 @@ class Assembly(AssemblyBase):
                 else:
                     n_global_dof = 0
 
-                rowMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
-                colMCB = np.empty((len(listGlobalVector) * n_el, n_elm_nodes, dim, dim))
                 dataMCB = np.empty(
                     (len(listGlobalVector) * n_el, n_elm_nodes, dim, dim)
                 )
-
                 for ivec, vec in enumerate(listGlobalVector):
                     # dataMCB[ivec*n_el:(ivec+1)*n_el] = local_frame_el[:,:,:dim,:dim]
                     dataMCB[ivec * n_el : (ivec + 1) * n_el] = local_frame_el
-                    rowMCB[ivec * n_el : (ivec + 1) * n_el] = (
-                        np.arange(n_el).reshape(-1, 1, 1, 1)
-                        + range_n_elm_nodes.reshape(1, -1, 1, 1) * n_el
-                        + np.array(vec).reshape(1, 1, -1, 1) * (n_el * n_elm_nodes)
-                    )
-                    colMCB[ivec * n_el : (ivec + 1) * n_el] = (
-                        elm.reshape(n_el, n_elm_nodes, 1, 1)
-                        + np.array(vec).reshape(1, 1, 1, -1) * n_nd
-                    )
-
+                dataMCB = dataMCB.reshape(-1)
                 if len(listScalarVariable) > 0:
                     # add the component from scalar variables (ie variable not requiring a change of basis)
                     dataMCB = np.hstack(
                         (
-                            dataMCB.reshape(-1),
+                            dataMCB,
                             np.ones(len(listScalarVariable) * n_el * n_elm_nodes),
                         )
                     )  # no change of variable so only one value adding in dataMCB
 
-                    rowMCB_loc = np.empty((len(listScalarVariable) * n_el, n_elm_nodes))
-                    colMCB_loc = np.empty((len(listScalarVariable) * n_el, n_elm_nodes))
-                    for ivar, var in enumerate(listScalarVariable):
-                        rowMCB_loc[ivar * n_el : (ivar + 1) * n_el] = (
-                            np.arange(n_el).reshape(-1, 1)
-                            + range_n_elm_nodes.reshape(1, -1) * n_el
-                            + var * (n_el * n_elm_nodes)
-                        )
-                        colMCB_loc[ivar * n_el : (ivar + 1) * n_el] = elm + var * n_nd
-
-                    rowMCB = np.hstack((rowMCB.reshape(-1), rowMCB_loc.reshape(-1)))
-                    colMCB = np.hstack((colMCB.reshape(-1), colMCB_loc.reshape(-1)))
-
-                    mat_change_of_basis = sparse.coo_matrix(
-                        (dataMCB, (rowMCB, colMCB)),
-                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_global_dof),
-                    )
-                else:
-                    mat_change_of_basis = sparse.coo_matrix(
-                        (
-                            dataMCB.reshape(-1),
-                            (rowMCB.reshape(-1), colMCB.reshape(-1)),
-                        ),
-                        shape=(n_el * n_elm_nodes * nvar, n_nd * nvar + n_global_dof),
-                    )
-
-                mat_change_of_basis = mat_change_of_basis.tocsr()
+                rowMCB, colMCB = self._change_of_basis_indices(
+                    mesh, listGlobalVector, listScalarVariable, dim
+                )
+                # csr conversion of the coo matrix, cached for the same indices
+                mat_change_of_basis = _coo_to_csr(
+                    dataMCB,
+                    rowMCB,
+                    colMCB,
+                    (n_el * n_elm_nodes * nvar, n_nd * nvar + n_global_dof),
+                )
 
         Assembly._saved_change_of_basis_mat[change_of_basis_key] = mat_change_of_basis
         return mat_change_of_basis
+
+    @staticmethod
+    def _change_of_basis_indices(mesh, list_vectors, list_scalars, dim):
+        """Row and column indices of the coo entries of the change of basis
+        matrix (the values change with the local frames). Kept on the mesh,
+        for the same variables, while its element table is unchanged (a copy
+        is compared, so that a table modified in place is detected)."""
+        elm, n_nd = mesh.elements, mesh.n_nodes
+        key = (
+            n_nd,
+            tuple(tuple(vec) for vec in list_vectors),
+            tuple(list_scalars),
+            dim,
+        )
+        saved = getattr(mesh, "_saved_change_of_basis_indices", None)
+        if saved is None:
+            saved = mesh._saved_change_of_basis_indices = {}
+        cached = saved.get(key)
+        if cached is not None and np.array_equal(cached[0], elm):
+            return cached[1], cached[2]
+
+        n_el, n_elm_nodes = elm.shape
+        range_n_elm_nodes = np.arange(n_elm_nodes)
+        rowMCB = np.empty((len(list_vectors) * n_el, n_elm_nodes, dim, dim))
+        colMCB = np.empty((len(list_vectors) * n_el, n_elm_nodes, dim, dim))
+        for ivec, vec in enumerate(list_vectors):
+            rowMCB[ivec * n_el : (ivec + 1) * n_el] = (
+                np.arange(n_el).reshape(-1, 1, 1, 1)
+                + range_n_elm_nodes.reshape(1, -1, 1, 1) * n_el
+                + np.array(vec).reshape(1, 1, -1, 1) * (n_el * n_elm_nodes)
+            )
+            colMCB[ivec * n_el : (ivec + 1) * n_el] = (
+                elm.reshape(n_el, n_elm_nodes, 1, 1)
+                + np.array(vec).reshape(1, 1, 1, -1) * n_nd
+            )
+        rowMCB, colMCB = rowMCB.reshape(-1), colMCB.reshape(-1)
+
+        if len(list_scalars) > 0:
+            # variables that don't require a change of basis
+            rowMCB_loc = np.empty((len(list_scalars) * n_el, n_elm_nodes))
+            colMCB_loc = np.empty((len(list_scalars) * n_el, n_elm_nodes))
+            for ivar, var in enumerate(list_scalars):
+                rowMCB_loc[ivar * n_el : (ivar + 1) * n_el] = (
+                    np.arange(n_el).reshape(-1, 1)
+                    + range_n_elm_nodes.reshape(1, -1) * n_el
+                    + var * (n_el * n_elm_nodes)
+                )
+                colMCB_loc[ivar * n_el : (ivar + 1) * n_el] = elm + var * n_nd
+            rowMCB = np.hstack((rowMCB, rowMCB_loc.reshape(-1)))
+            colMCB = np.hstack((colMCB, colMCB_loc.reshape(-1)))
+
+        rowMCB.flags.writeable = False
+        colMCB.flags.writeable = False
+        saved[key] = (np.array(elm), rowMCB, colMCB)
+        return rowMCB, colMCB
 
     def _change_of_basis_cache_key(self):
         """Return the cache key for the assembly change-of-basis matrix."""
@@ -931,6 +1019,7 @@ class Assembly(AssemblyBase):
         # Assembly._saved_node2gausspoint_mat = {}
         # Assembly._saved_gausspoint2node_mat = {}
         Assembly._saved_associated_variables = {}
+        Assembly._saved_coordinate_index = {}
 
     def compute_elementary_operators(
         self, n_elm_gp=None
@@ -1002,12 +1091,7 @@ class Assembly(AssemblyBase):
             n_col = mesh.n_nodes
         else:
             # ChangeOfBasis = True -> modify col vector
-            col = np.empty((n_elements, n_elm_gp, n_elm_nodes))
-            col[:] = (
-                np.arange(n_elements).reshape((-1, 1, 1))
-                + np.arange(n_elm_nodes).reshape((1, 1, -1)) * n_elements
-            )
-            col = col.reshape(-1)
+            col = _local_dof_col(n_elements, n_elm_gp, n_elm_nodes)
             n_col = n_elements * n_elm_nodes
 
         # -------------------------------------------------------------------
@@ -1162,7 +1246,7 @@ class Assembly(AssemblyBase):
             _elementary_operator_values_numba,
             _csr_pattern,
             _csr_from_pattern,
-            _set_numba_threads,
+            _numba_threads,
         )
 
         if _elementary_operator_values_numba is None:
@@ -1196,18 +1280,20 @@ class Assembly(AssemblyBase):
         pattern = _csr_pattern(row, col, shape)
         if not pattern.valid:
             return None
-        out = np.empty((1 + inv_jac.shape[2], len(pattern.perm)))
-        _set_numba_threads()
-        _elementary_operator_values_numba(
-            np.ascontiguousarray(inv_jac, dtype=np.float64),
-            np.ascontiguousarray(dshape, dtype=np.float64),
-            np.ascontiguousarray(sf, dtype=np.float64),
-            pattern.perm,
-            n_elm_gp,
-            n_elm_nodes,
-            out,
-        )
-        return [[_csr_from_pattern(out[i], pattern)] for i in range(out.shape[0])]
+        # one array per operator: a row of a 2d array would be copied by
+        # scipy (data much smaller than its base)
+        out = tuple(np.empty(len(pattern.perm)) for _ in range(1 + inv_jac.shape[2]))
+        with _numba_threads(len(pattern.perm) * len(out)):
+            _elementary_operator_values_numba(
+                np.ascontiguousarray(inv_jac, dtype=np.float64),
+                np.ascontiguousarray(dshape, dtype=np.float64),
+                np.ascontiguousarray(sf, dtype=np.float64),
+                pattern.perm,
+                n_elm_gp,
+                n_elm_nodes,
+                out,
+            )
+        return [[_csr_from_pattern(values, pattern)] for values in out]
 
     def _get_elementary_operator(self, deriv, n_elm_gp=None):
         # Gives a list of sparse matrix that convert node values for one variable to the pg values of a simple derivative op (for instance d/dz)
@@ -1219,8 +1305,9 @@ class Assembly(AssemblyBase):
         elm_type = self.elm_type
         mesh = self.mesh
 
-        if hasattr(get_element(elm_type), "get_elm_type"):
-            elm_type = get_element(elm_type).get_elm_type(deriv.u_name).name
+        element = get_element(elm_type)
+        if hasattr(element, "get_elm_type"):
+            elm_type = element.get_elm_type(deriv.u_name).name
 
         key = (
             mesh,
@@ -1229,10 +1316,10 @@ class Assembly(AssemblyBase):
             self._use_local_csys,
             mesh._local_frame_cache_key(self._element_local_frame),
         )
-        if key not in Assembly._saved_elementary_operators:
+        data = Assembly._saved_elementary_operators.get(key)
+        if data is None:
             self.compute_elementary_operators(n_elm_gp)
-
-        data = Assembly._saved_elementary_operators[key]
+            data = Assembly._saved_elementary_operators[key]
 
         if deriv.ordre == 0:
             # in this case deriv.x should be 0 execpt if several interpolations
@@ -1241,14 +1328,8 @@ class Assembly(AssemblyBase):
             xx = deriv.x
         else:
             # extract the mesh coordinate that corespond to coordinate rank given in deriv.x
-            ListMeshCoordinatenameRank = [
-                self.space.coordinate_rank(crdname)
-                for crdname in mesh.crd_name
-                if crdname in self.space.list_coordinates()
-            ]
-            if deriv.x in ListMeshCoordinatenameRank:
-                xx = ListMeshCoordinatenameRank.index(deriv.x)
-            else:
+            xx = self._mesh_coordinate_index(deriv.x)
+            if xx is None:
                 # for PGD only (will be probably deprecated):
                 # if the coordinate doesnt exist, return operator without
                 # derivation ()
@@ -1257,6 +1338,27 @@ class Assembly(AssemblyBase):
             return data[deriv.ordre, xx]
         else:
             assert 0, "Operator unavailable"
+
+    def _mesh_coordinate_index(self, x):
+        """Index, among the mesh coordinates that are coordinates of the
+        modeling space, of the coordinate of rank x; None if absent. Cached
+        by (mesh coordinate names, space, number of space coordinates, x)."""
+        key = (self.mesh.crd_name, self.space, self.space.ncrd, x)
+        try:
+            return Assembly._saved_coordinate_index[key]
+        except KeyError:
+            pass
+        except TypeError:  # unhashable key: no cache
+            key = None
+        ranks = [
+            self.space.coordinate_rank(crdname)
+            for crdname in self.mesh.crd_name
+            if crdname in self.space.list_coordinates()
+        ]
+        index = ranks.index(x) if x in ranks else None
+        if key is not None:
+            Assembly._saved_coordinate_index[key] = index
+        return index
 
     def _get_gaussian_quadrature_mat(
         self,
@@ -1395,7 +1497,13 @@ class Assembly(AssemblyBase):
                 self._get_elementary_operator(operator.op[ii], n_elm_gp), var, coef
             ):
                 n = op.shape[1]
-                values = values + _mul_coef(c, _csr_matvec(op, U[v * n : (v + 1) * n]))
+                if np.isscalar(values) and isinstance(c, Number) and c == 1:
+                    # a new array without -0. (sums from +0.): it is 0 + itself
+                    values = _csr_matvec(op, U[v * n : (v + 1) * n])
+                else:
+                    values = values + _mul_coef(
+                        c, _csr_matvec(op, U[v * n : (v + 1) * n])
+                    )
             res += _mul_coef(coef_PG, values)
 
         return res  # equivalent to self._get_assembled_operator(operator, n_elm_gp) @ U but more optimized
@@ -1687,45 +1795,95 @@ class Assembly(AssemblyBase):
         grad_operator = self.space.op_grad_u()
 
         if Type == "Node":
+            gp_results = self._gp_results_by_operator(grad_operator, U)
             return [
                 [
                     (
-                        self.get_node_results(op, U)
+                        # as get_node_results
+                        self.mesh._get_gausspoint2node_mat(self.n_elm_gp)
+                        @ gp_results[i][j]
                         if op != 0
                         else np.zeros(self.mesh.n_nodes)
                     )
-                    for op in line_op
+                    for j, op in enumerate(line_op)
                 ]
-                for line_op in grad_operator
+                for i, line_op in enumerate(grad_operator)
             ]
 
         elif Type == "Element":
+            gp_results = self._gp_results_by_operator(grad_operator, U)
+            n_elements = self.mesh.n_elements
             return [
                 [
                     (
-                        self.get_element_results(op, U)
+                        # as get_element_results
+                        np.reshape(
+                            gp_results[i][j],
+                            (gp_results[i][j].shape[0] // n_elements, -1),
+                        ).sum(0)
+                        / (gp_results[i][j].shape[0] // n_elements)
                         if op != 0
                         else np.zeros(self.mesh.n_elements)
                     )
-                    for op in line_op
+                    for j, op in enumerate(line_op)
                 ]
-                for line_op in grad_operator
+                for i, line_op in enumerate(grad_operator)
             ]
 
         elif Type == "GaussPoint":
+            gp_results = self._gp_results_by_operator(grad_operator, U)
             return [
                 [
-                    (
-                        self.get_gp_results(op, U)
-                        if op != 0
-                        else np.zeros(self.n_gauss_points)
-                    )
-                    for op in line_op
+                    (gp_results[i][j] if op != 0 else np.zeros(self.n_gauss_points))
+                    for j, op in enumerate(line_op)
                 ]
-                for line_op in grad_operator
+                for i, line_op in enumerate(grad_operator)
             ]
         else:
             assert 0, "Wrong argument for Type: use 'Node', 'Element', or 'GaussPoint'"
+
+    def _gp_results_by_operator(self, operators, U):
+        """[[self.get_gp_results(op, U) for op in line] for line in operators]
+        (None for the operators equal to 0). The simple operators (one
+        derivative of a variable without associated variable, coefficient 1,
+        no change of basis) that share an elementary operator are applied to
+        their variables together, the operator being read once (numba): same
+        values."""
+        res = [[None for op in line] for line in operators]
+        simple = {}  # id(elementary operator) -> (operator, [(i, j, values)])
+        mat_change_of_basis = self.get_change_of_basis_mat()
+        if np.isscalar(mat_change_of_basis) and mat_change_of_basis == 1:
+            associated_variables = self._get_associated_variables()
+            for i, line in enumerate(operators):
+                for j, op in enumerate(line):
+                    if (
+                        isinstance(op, DiffOp)
+                        and len(op.op) == 1
+                        and isinstance(op.op[0], _Derivative)
+                        and np.isscalar(op.op_vir[0])
+                        and op.op_vir[0] == 1
+                        and isinstance(op.coef[0], Number)
+                        and op.coef[0] == 1
+                        and op.op[0].u not in associated_variables
+                    ):
+                        matrix = self._get_elementary_operator(op.op[0])[0]
+                        n = matrix.shape[1]
+                        u = op.op[0].u
+                        simple.setdefault(id(matrix), (matrix, []))[1].append(
+                            (i, j, U[u * n : (u + 1) * n])
+                        )
+        for matrix, items in simple.values():
+            values = _csr_matvec_multi(matrix, [x for _, _, x in items])
+            if values is None:
+                continue
+            # get_gp_results: 0 + (a new matvec array, without -0.): itself
+            for (i, j, _), v in zip(items, values):
+                res[i][j] = v
+        for i, line in enumerate(operators):
+            for j, op in enumerate(line):
+                if res[i][j] is None and op != 0:
+                    res[i][j] = self.get_gp_results(op, U)
+        return res
 
     def get_int_forces(self, U, CoordinateSystem="global"):
         """

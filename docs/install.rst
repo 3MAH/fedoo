@@ -82,8 +82,9 @@ You can also install optional groups individually:
 
 `numba <https://numba.pydata.org/>`_ is optional and not installed by fedoo.
 When it is present (``pip install numba`` or ``conda install -c conda-forge
-numba``), the assembly uses compiled kernels instead of numpy, on the number
-of threads given by ``fedoo.get_config()["N_THREADS"]``.
+numba``), the assembly uses compiled kernels instead of numpy, on at most the
+number of threads given by ``fedoo.get_config()["N_THREADS"]`` (fewer for a
+small model).
 
 
 Sparse solvers

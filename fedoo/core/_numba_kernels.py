@@ -79,6 +79,19 @@ def csr_matvec(indptr, indices, data, x, out):
         out[i] = s
 
 
+@njit(parallel=True, cache=True)
+def csr_matvec_multi(indptr, indices, data, x, out):
+    """out[k] = A @ x[k] for the csr matrix A = (data, indices, indptr) and
+    the rows of x, by rows of A (read once): the operations of csr_matvec.
+    out: tuple of len(x) separate arrays."""
+    for i in prange(len(indptr) - 1):
+        for k in range(len(out)):
+            s = 0.0
+            for p in range(indptr[i], indptr[i + 1]):
+                s += data[p] * x[k, indices[p]]
+            out[k][i] = s
+
+
 @intrinsic
 def _float64_pointer(typingctx, address):
     """The address (int64) of float64 values as a pointer, for carray."""
@@ -203,7 +216,9 @@ def elementary_operator_values(inv_jac, dshape, shape, perm, n_gp, n_nodes, out)
     gauss point g, local node k) that the csr position p holds (q = perm[p]).
 
     inv_jac: (n_elm, n_gp, d, d_ref); dshape: (n_gp, d_ref, n_nodes);
-    shape: (m, n_gp, n_nodes) with m = 1 (same for all elements) or n_elm.
+    shape: (m, n_gp, n_nodes) with m = 1 (same for all elements) or n_elm;
+    out: tuple of d + 1 arrays (separate arrays, so that each one may be the
+    data of a csr matrix without being copied by scipy).
     """
     d = inv_jac.shape[2]
     d_ref = inv_jac.shape[3]
@@ -214,12 +229,12 @@ def elementary_operator_values(inv_jac, dshape, shape, perm, n_gp, n_nodes, out)
         eg = q // n_nodes
         g = eg % n_gp
         e = eg // n_gp
-        out[0, p] = shape[0 if shared else e, g, k]
+        out[0][p] = shape[0 if shared else e, g, k]
         for i in range(d):
             s = 0.0
             for c in range(d_ref):
                 s += inv_jac[e, g, i, c] * dshape[g, c, k]
-            out[1 + i, p] = s
+            out[1 + i][p] = s
 
 
 @njit(parallel=True, cache=True)
@@ -279,3 +294,10 @@ def small_inv(a, out):
             out[k, 1, 2] = (a[k, 0, 2] * a[k, 1, 0] - a[k, 0, 0] * a[k, 1, 2]) / d
             out[k, 2, 2] = (a[k, 0, 0] * a[k, 1, 1] - a[k, 0, 1] * a[k, 1, 0]) / d
     return singular == 0
+
+
+@njit(parallel=True, cache=True)
+def take(values, index, out):
+    """out = values[index]."""
+    for p in prange(len(out)):
+        out[p] = values[index[p]]

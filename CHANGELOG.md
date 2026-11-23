@@ -275,6 +275,20 @@ semantic versioning.
   array is still computed, when it is read, without numba, for lumped terms,
   vector terms, terms scaled by a factor other than 1 (associated variables) and
   coefficients that are not float64 arrays of Gauss point values.
+- **Numba kernels use a thread count sized to their work**: one thread per
+  20 000 values read, up to `N_THREADS` (or the performance cores), since
+  starting the threads costs more than a small product. numba's thread count
+  is restored after each kernel, so that it no longer stays at fedoo's value in
+  the user's own numba code. Results do not depend on the number of threads.
+- **Elementary operators are applied to several vectors in one read** (numba):
+  `Assembly.get_grad_disp` applies each derivative operator to the displacement
+  components together, and the residual computes the transposed products that
+  share an operator together. The operators of the numba path are no longer
+  copied by scipy and their transposition runs in parallel. Same values bit for
+  bit.
+- **Change of basis matrix of beams, plates and interface elements**: the row
+  and column indices are kept on the mesh while its element table is unchanged,
+  and the conversion to csr reuses its cached pattern. Same matrix.
 
 
 ### Fixed

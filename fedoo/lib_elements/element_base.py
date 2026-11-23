@@ -31,9 +31,6 @@ def _as_stack(a):
         or _kernels()[0] is None
     ):
         return None
-    from fedoo.core._sparsematrix import _set_numba_threads
-
-    _set_numba_threads()
     return np.ascontiguousarray(a).reshape(-1, a.shape[-1], a.shape[-1])
 
 
@@ -44,8 +41,11 @@ def _small_det(a):
     """
     stack = _as_stack(a)
     if stack is not None:
+        from fedoo.core._sparsematrix import _numba_threads
+
         out = np.empty(stack.shape[0])
-        _kernels()[0](stack, out)
+        with _numba_threads(stack.size):
+            _kernels()[0](stack, out)
         return out.reshape(a.shape[:-2])
     if a.shape[-1] == 2:
         return a[..., 0, 0] * a[..., 1, 1] - a[..., 0, 1] * a[..., 1, 0]
@@ -65,8 +65,12 @@ def _small_inv(a):
         return np.linalg.inv(a)
     stack = _as_stack(a)
     if stack is not None:
+        from fedoo.core._sparsematrix import _numba_threads
+
         out = np.empty_like(stack)
-        if not _kernels()[1](stack, out):
+        with _numba_threads(stack.size):
+            regular = _kernels()[1](stack, out)
+        if not regular:
             return np.linalg.inv(a)
         return out.reshape(a.shape)
     inv = np.empty_like(a)
