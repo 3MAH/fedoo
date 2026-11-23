@@ -36,4 +36,5 @@ test:
   requires:
     - pytest
   commands:
-    - pytest tests
+    # Exclude documentation publishing checks.
+    - pytest tests --ignore=tests/test_precomputed_records.py
