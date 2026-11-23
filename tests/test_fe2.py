@@ -241,8 +241,9 @@ def test_fe2_micro_failure_cuts_the_macro_step_and_saves_only_accepted_times(
     saved_times = []
     restore = problem.to_start
 
-    def solve_trial(max_subiter, tol_nr):
-        assert (max_subiter, tol_nr) == (9, 1e-8)
+    def solve_trial():
+        assert micro.nr_parameters["max_subiter"] == 9
+        assert micro.nr_parameters["tol"] == 1e-8
         span = micro.tmax - micro.t0
         attempts.append((span, micro.dtime))
         if span > 0.25:
@@ -251,7 +252,7 @@ def test_fe2_micro_failure_cuts_the_macro_step_and_saves_only_accepted_times(
                 return False, 1, 1.0
         elif micro.dtime > 0.0625:
             return False, 1, 1.0
-        return solve(max_subiter, tol_nr)
+        return solve()
 
     def check_rollback():
         restore()

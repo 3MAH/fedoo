@@ -4,12 +4,13 @@ import numpy as np
 
 from fedoo.constraint.periodic_bc import PeriodicBC
 from fedoo.core.assembly import Assembly
+from fedoo.core.base import InvalidKinematicStateError
 from fedoo.core.mechanical3d import Mechanical3D
 from fedoo.homogen.tangent_stiffness import (
     get_homogenized_stiffness,
     get_tangent_stiffness,
 )
-from fedoo.problem.non_linear import NonLinear, NonlinearConvergenceError
+from fedoo.problem.non_linear import NonLinear
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 
 
@@ -118,6 +119,7 @@ class FE2(Mechanical3D):
                 self.list_assembly[index],
                 name=f"_fe2_cell_{index}",
             )
+            micro_problem.print_info = 0
             micro_problem.set_nr_criterion(**self._micro_nr_options)
             self.list_problem.append(micro_problem)
             micro_problem.bc.add(
@@ -184,6 +186,43 @@ class FE2(Mechanical3D):
                 leaf.sv_start = sv.copy()
         micro_problem.to_start()
 
+    def _solve_micro_trial(self, index, span):
+        """Advance the cell to the trial strain, leaving its final step uncommitted."""
+        micro = self.list_problem[index]
+        step = span
+        min_step = span * 1e-6
+        time_tol = min(micro.err_num, min_step * 0.01)
+        grow_after = micro.nr_parameters["dt_increase_niter"]
+        if grow_after is None:
+            grow_after = micro.nr_parameters["max_subiter"] // 3
+
+        while True:
+            remaining = micro.tmax - micro.time
+            final_step = step >= remaining - time_tol
+            micro.dtime = remaining if final_step else step
+            converged, iterations, _ = micro.solve_time_increment()
+            if not converged:
+                step = micro.dtime * 0.25
+                if step < min_step or micro.time + step == micro.time:
+                    micro.time = micro.t0
+                    self._restore_state(index)
+                    # This macro trial has no usable constitutive response.
+                    # Use the solver's existing rejected-displacement path.
+                    raise InvalidKinematicStateError(
+                        f"FE2: microscopic problem at integration point {index} did not converge."
+                    )
+                micro.to_start()
+                continue
+
+            micro._dtime_prev = micro.dtime
+            if final_step:
+                micro.time = micro.tmax
+                return
+            micro.time += micro.dtime
+            micro.set_start()
+            if iterations <= grow_after:
+                step *= 1.25
+
     def _update_pb(self, index, assembly_macro, pb_macro):
         strain = assembly_macro.sv["Strain"].asarray()[:, index]
         strain_start = assembly_macro.sv_start["Strain"].asarray()[:, index]
@@ -191,7 +230,8 @@ class FE2(Mechanical3D):
 
         print("\r", index + 1, "/", len(self.list_problem), end="")
         span = pb_macro.dtime if pb_macro.dtime > 0 else 1.0
-        micro_problem.time = pb_macro.time
+        micro_problem.t0 = micro_problem.time = pb_macro.time
+        micro_problem.tmax = pb_macro.time + span
         micro_problem.dtime = span
         self._restore_state(index)
         if self._strain_bc[index] is not None:
@@ -199,19 +239,8 @@ class FE2(Mechanical3D):
         self._strain_bc[index] = micro_problem.bc.add(
             "Dirichlet", "MeanStrain", strain, start_value=strain_start
         )
-        try:
-            micro_problem.nlsolve(
-                t0=pb_macro.time,
-                tmax=pb_macro.time + span,
-                dt=span,
-                dt_min=span * 1e-6,
-                print_info=0,
-                _trial=True,
-            )
-        except NonlinearConvergenceError as error:
-            raise NonlinearConvergenceError(
-                f"FE2: microscopic problem at integration point {index} did not converge."
-            ) from error
+        micro_problem.init_bc_start_value()
+        self._solve_micro_trial(index, span)
 
         # tangent matrix of the cell at its converged state
         micro_problem.update(compute="matrix", updateWeakForm=False)
