@@ -106,6 +106,15 @@ semantic versioning.
 
 ### Changed
 
+- **``FE2`` has a ``tol_nr`` attribute** (default 0.05, the value formerly
+  written in the code) for the Newton-Raphson tolerance of the microscopic
+  problems. The time of a microscopic problem now follows the macroscopic
+  time (it restarted from 0 at each update), and the outputs added to a
+  microscopic problem are written once per converged macroscopic increment
+  instead of at every Newton-Raphson iteration. A cell that does not converge
+  is still cut (by 4, down to 1e-6 of the macroscopic increment) before a
+  ``RuntimeError`` is raised.
+
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
@@ -257,6 +266,25 @@ semantic versioning.
   nested lists.
 
 ### Fixed
+
+- **The ``FE2`` constitutive law advanced its microscopic problems at every
+  update.** Each update of the macroscopic problem (one per Newton-Raphson
+  iteration) solved the cells with ``nlsolve``, which commits their state, and
+  the next update applied the whole strain increment again on top of it: the
+  n-th update of an increment returned n times the stress of an elastic cell
+  (stresses and reactions twice too large on a linear problem, no convergence
+  with an elastoplastic cell). The cells now start every update from their
+  state at the beginning of the macroscopic increment and are committed only
+  when that increment has converged. On a clamped beam with a cell made of the
+  macroscopic solid, the single-scale solution is recovered to 1e-15, elastic
+  and elastoplastic.
+- **``FE2`` returned the elastic tangent of a cell that had yielded.** The
+  homogenized tangent was computed after the commit of the cell, which had
+  put the elastic matrix back for the next prediction. It is now computed from
+  the tangent matrix assembled at the converged state of the cell.
+- **``FE2`` wrote the macroscopic stress, tangent and energy in the arrays
+  shared with the start state of the increment**, so a cancelled increment
+  could not be restored. Each update now writes in new arrays.
 
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
