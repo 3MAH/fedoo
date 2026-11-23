@@ -5,6 +5,7 @@ from scipy import sparse
 
 from fedoo.core._sparsematrix import (
     RowBlocMatrix,
+    _WeightedCoef,
     _coo_to_csr,
     _csr_matvec,
     _csr_rmatvec,
@@ -412,7 +413,7 @@ class Assembly(AssemblyBase):
                 sum_coef = (
                     False  # bool that indicate if operator are the same and can be sum
                 )
-                weighted_coefs = {}  # id(coef) -> (coef, coef * gauss weights)
+                weighted_coefs = {}  # id(coef) -> (coef, its _WeightedCoef)
 
                 if hasattr(self.weakform, "_list_mat_lumping"):
                     change_mat_lumping = (
@@ -422,18 +423,18 @@ class Assembly(AssemblyBase):
                     change_mat_lumping = False
                     mat_lumping = self.mat_lumping
 
+                # operators equal to 1 (virtual operator only: vector terms)
+                op_is_one = [op == 1 for op in wf.op]
+                gauss_weights = mat_gaussian_quadrature.data
+
                 for ii in range(len(wf.op)):
-                    if (
-                        compute == "matrix"
-                        and np.isscalar(wf.op[ii])
-                        and wf.op[ii] == 1
-                    ):
+                    if compute == "matrix" and op_is_one[ii]:
                         continue
-                    if compute == "vector" and not wf.op[ii] == 1:
+                    if compute == "vector" and not op_is_one[ii]:
                         continue
 
                     if (
-                        not wf.op[ii] == 1
+                        not op_is_one[ii]
                         and self.assume_sym
                         and wf.op[ii].u < wf.op_vir[ii].u
                     ):
@@ -452,12 +453,10 @@ class Assembly(AssemblyBase):
 
                     # if ii > 0 and intRef[ii] == intRef[ii-1]: #if same operator as previous with different coef, add the two coef
                     if sum_coef:  # if same operator as previous with different coef, add the two coef
-                        coef_PG_sum = (
-                            coef_PG_sum + coef_PG
-                        )  # not in place: coefs may be shared
+                        coef_parts.append(coef_PG)  # summed when weighted
                         sum_coef = False
                     else:
-                        coef_PG_sum = coef_PG
+                        coef_parts = [coef_PG]
 
                     if (
                         ii < len(wf.op) - 1 and same_op_as_next[ii]
@@ -470,15 +469,19 @@ class Assembly(AssemblyBase):
                             sum_coef = True
                             continue
 
-                    # an array coef shared by several terms (e.g. a tangent
-                    # component) is weighted once by the quadrature diagonal
-                    weighted = weighted_coefs.get(id(coef_PG_sum))
-                    if weighted is not None and weighted[0] is coef_PG_sum:
-                        coef_PG = weighted[1]
+                    # sum of coef_parts times the gauss weights, computed when
+                    # read (or by the numba kernel); a shared coef: once
+                    if len(coef_parts) == 1:
+                        coef_PG_sum = coef_parts[0]
+                        weighted = weighted_coefs.get(id(coef_PG_sum))
+                        if weighted is not None and weighted[0] is coef_PG_sum:
+                            coef_PG = weighted[1]
+                        else:
+                            coef_PG = _WeightedCoef(coef_parts, gauss_weights)
+                            if not np.isscalar(coef_PG_sum):
+                                weighted_coefs[id(coef_PG_sum)] = (coef_PG_sum, coef_PG)
                     else:
-                        coef_PG = coef_PG_sum * mat_gaussian_quadrature.data
-                        if not np.isscalar(coef_PG_sum):
-                            weighted_coefs[id(coef_PG_sum)] = (coef_PG_sum, coef_PG)
+                        coef_PG = _WeightedCoef(coef_parts, gauss_weights)
                     # check how it appens with change of variable and rotation dof
 
                     Matvir = self._get_elementary_operator(wf.op_vir[ii])
@@ -493,8 +496,8 @@ class Assembly(AssemblyBase):
 
                     if (
                         ii < len(wf.op) - 1
-                        and wf.op[ii] != 1
-                        and wf.op[ii + 1] != 1
+                        and not op_is_one[ii]
+                        and not op_is_one[ii + 1]
                         and self.__factorize_op == True
                     ):
                         # if it possible, factorization of op to increase assembly performance (sum of several op_vir)
@@ -527,13 +530,14 @@ class Assembly(AssemblyBase):
                         var_vir.extend(associatedVariables[var_vir[0]][0])
                         coef_vir.extend(associatedVariables[var_vir[0]][1])
 
-                    if wf.op[ii] == 1:  # only virtual operator -> compute a vector
-                        if np.array_equal(VV, 0):
+                    if op_is_one[ii]:  # only virtual operator -> compute a vector
+                        if np.isscalar(VV):  # VV = 0
                             VV = np.zeros(n_dof)
+                        values = coef_PG.values()
                         for i in range(len(Matvir)):
                             try:
                                 VV[sl[var_vir[i]]] -= _mul_coef(
-                                    coef_vir[i], _csr_rmatvec(Matvir[i], coef_PG)
+                                    coef_vir[i], _csr_rmatvec(Matvir[i], values)
                                 )
                             except:
                                 pass

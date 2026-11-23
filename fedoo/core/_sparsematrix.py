@@ -187,6 +187,46 @@ def _coo_to_csr(data, row, col, shape):
     return res
 
 
+class _WeightedCoef:
+    """Coefficient of an assembly term at the gauss points, weighted by the
+    gauss weights: (parts[0] + parts[1] + ...) * weights, the parts being
+    numbers or arrays of gauss point values.
+
+    The product is computed by values() (once), or by the numba kernel of the
+    element matrices, which reads the parts in place (e.g. strided views of a
+    tangent matrix) with the same operations, so that no weighted array is
+    allocated.
+    """
+
+    __slots__ = ("parts", "weights", "_values")
+    __array_ufunc__ = None  # numpy scalars defer to __rmul__
+
+    def __init__(self, parts, weights):
+        self.parts = parts
+        self.weights = weights
+        self._values = None
+
+    def values(self):
+        """The array (parts[0] + parts[1] + ...) * weights."""
+        if self._values is None:
+            coef = self.parts[0]
+            for part in self.parts[1:]:
+                coef = coef + part
+            self._values = coef * self.weights
+        return self._values
+
+    def __mul__(self, other):
+        return self.values() * other
+
+    def __rmul__(self, other):
+        return other * self.values()
+
+
+def _coef_values(coef):
+    """The values of a coefficient, a _WeightedCoef being computed."""
+    return coef.values() if isinstance(coef, _WeightedCoef) else coef
+
+
 def _gauss_sum_atb(coefs, a_list, b, out=None):
     """Element matrices sum_g outer(sum_k coefs[k][g, e] a_list[k][g, e], b[g, e]).
 
@@ -293,6 +333,12 @@ class _BlocSparse:
         self.isempty = False
         if self.nbpg is None or mat_lumping:
             self._flush()  # these paths read the blocs
+        if self.nbpg is None:
+            coef = (
+                [_coef_values(c) for c in coef]
+                if isinstance(coef, list)
+                else _coef_values(coef)
+            )
 
         n_elm_gp = self.nbpg
         NnzColPerRowB = B.indptr[
@@ -316,7 +362,11 @@ class _BlocSparse:
                 new_data = self._add_gauss_sum_atb(
                     rowBloc,
                     colBloc,
-                    [coef if isinstance(coef, Number) else coef.reshape(n_elm_gp, -1)],
+                    [
+                        coef
+                        if isinstance(coef, (Number, _WeightedCoef))
+                        else coef.reshape(n_elm_gp, -1)
+                    ],
                     [A.data.reshape(n_elm_gp, -1, NnzColPerRowA)],
                     B.data.reshape(n_elm_gp, -1, NnzColPerRowB),
                     mat_lumping,
@@ -366,7 +416,11 @@ class _BlocSparse:
                     rowBloc,
                     colBloc,
                     [
-                        c if isinstance(c, Number) else c.reshape(n_elm_gp, -1)
+                        (
+                            c
+                            if isinstance(c, (Number, _WeightedCoef))
+                            else c.reshape(n_elm_gp, -1)
+                        )
                         for c in listCoef
                     ],
                     [a.data.reshape(n_elm_gp, -1, NnzColPerRowA) for a in listA],
@@ -435,6 +489,10 @@ class _BlocSparse:
             self._jobs.append((rowBloc, colBloc, coefs, a_list, b))
             return None
         self._flush()
+        coefs = [
+            c.values().reshape(b.shape[0], -1) if isinstance(c, _WeightedCoef) else c
+            for c in coefs
+        ]
         new_data = _gauss_sum_atb(
             coefs,
             a_list,
@@ -456,8 +514,12 @@ class _BlocSparse:
             return (x.__array_interface__["data"][0], x.shape, x.strides)
 
         ops, op_index = [], {}
-        coefs, coef_index = [], {}
         n_gp, n_elm, n = jobs[0][4].shape
+        size = n_gp * n_elm
+        # coefficients: parts (float64 arrays, alive during the call) with
+        # their stride (in values) and gauss weights (array or None)
+        parts, part_stride, coef_ptr, coef_weight = [], [], [0], []
+        coef_index = {}
 
         def op_id(x):
             k = key(x)
@@ -466,21 +528,81 @@ class _BlocSparse:
                 ops.append(np.ascontiguousarray(x, dtype=np.float64))
             return op_index[k]
 
+        def add_coef(coef_parts, weights):
+            for part, stride in coef_parts:
+                parts.append(part)
+                part_stride.append(stride)
+            coef_ptr.append(len(parts))
+            coef_weight.append(weights)
+            return len(coef_weight) - 1
+
+        valid_weights = {}  # id(weights) -> weights, if valid for the kernel
+
+        def kernel_parts(c):
+            """The parts of a _WeightedCoef read in place by the kernel, None
+            if its values have to be computed first."""
+            w = c.weights
+            if valid_weights.get(id(w)) is not w:
+                if not (
+                    isinstance(w, np.ndarray)
+                    and w.dtype == np.float64
+                    and w.shape == (size,)
+                    and w.flags.c_contiguous
+                    and w.flags.aligned
+                ):
+                    return None
+                valid_weights[id(w)] = w
+            res = []
+            for part in c.parts:
+                if type(part) is np.ndarray:
+                    if not (
+                        part.dtype == np.float64
+                        and part.ndim == 1
+                        and part.shape[0] in (1, size)
+                        and part.flags.aligned
+                    ):
+                        return None
+                    stride = part.strides[0] if part.shape[0] > 1 else 0
+                    if stride < 0 or stride % 8:
+                        return None
+                    res.append((part, stride // 8))
+                elif isinstance(part, (int, float)):
+                    res.append((np.array([float(part)]), 0))
+                else:
+                    return None
+            return res
+
         def coef_id(c):
             if isinstance(c, Number):
                 k = ("scalar", float(c))
                 if k not in coef_index:
-                    coef_index[k] = len(coefs)
-                    coefs.append(np.full((n_gp, n_elm), float(c)))
+                    coef_index[k] = add_coef([(np.array([float(c)]), 0)], None)
+            elif isinstance(c, _WeightedCoef):
+                k = id(c)  # c is alive (in jobs)
+                if k not in coef_index:
+                    c_parts = kernel_parts(c)
+                    if c_parts is not None:
+                        coef_index[k] = add_coef(c_parts, c.weights)
+                    else:
+                        values = np.ascontiguousarray(
+                            np.broadcast_to(
+                                c.values().reshape(n_gp, -1), (n_gp, n_elm)
+                            ),
+                            dtype=np.float64,
+                        )
+                        coef_index[k] = add_coef([(values, 1)], None)
             else:
                 k = key(c)
                 if k not in coef_index:
-                    coef_index[k] = len(coefs)
-                    coefs.append(
-                        np.ascontiguousarray(
+                    if not (
+                        c.shape == (n_gp, n_elm)
+                        and c.dtype == np.float64
+                        and c.flags.c_contiguous
+                    ):
+                        c = np.ascontiguousarray(
                             np.broadcast_to(c, (n_gp, n_elm)), dtype=np.float64
                         )
-                    )
+                    coef_index[k] = add_coef([(c, 1)], None)
             return coef_index[k]
 
         blocs, bloc_index = [], {}
@@ -506,9 +628,15 @@ class _BlocSparse:
             if self.data[row_bloc][col_bloc] is not None:
                 out[o] = self.data[row_bloc][col_bloc]
         _set_numba_threads()
-        # coefs and ops: C contiguous float64 arrays, alive during the call
+        # coefficient parts, weights and ops: float64 arrays alive during the call
         _gauss_sum_atb_jobs_numba(
-            np.array([c.ctypes.data for c in coefs], dtype=np.int64),
+            np.array(coef_ptr, dtype=np.int64),
+            np.array([p.ctypes.data for p in parts], dtype=np.int64),
+            np.array(part_stride, dtype=np.int64),
+            np.array(
+                [0 if w is None else w.ctypes.data for w in coef_weight],
+                dtype=np.int64,
+            ),
             np.array([op.ctypes.data for op in ops], dtype=np.int64),
             n_gp,
             n_elm,

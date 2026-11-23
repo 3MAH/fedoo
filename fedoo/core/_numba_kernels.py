@@ -92,9 +92,26 @@ def _float64_pointer(typingctx, address):
     return sig, codegen
 
 
+@intrinsic
+def _load_float64(typingctx, address, index):
+    """The float64 value at address (int64) + 8 * index (int64)."""
+    sig = types.float64(types.int64, types.int64)
+
+    def codegen(context, builder, signature, args):
+        ptr = builder.inttoptr(
+            args[0], context.get_value_type(types.CPointer(types.float64))
+        )
+        return builder.load(builder.gep(ptr, [args[1]]))
+
+    return sig, codegen
+
+
 @njit(parallel=True, cache=True, fastmath={"contract"})
 def gauss_sum_atb_jobs(
-    coef_address,
+    coef_ptr,
+    part_address,
+    part_stride,
+    coef_weight,
     op_address,
     n_gp,
     n_elm,
@@ -111,17 +128,23 @@ def gauss_sum_atb_jobs(
 
     For each job c, in order: out[job_out[c], e] (+)= sum_g outer(sum_t
     coef_t[g, e] * op_a[g, e], op_b[g, e]) with t in term_ptr[c]:term_ptr[c + 1],
-    coef_t the (n_gp, n_elm) array at coef_address[term_coef[t]], op_a and op_b
-    the (n_gp, n_elm, n) arrays at op_address[term_a[t]] and
+    op_a and op_b the (n_gp, n_elm, n) arrays at op_address[term_a[t]] and
     op_address[job_b[c]], accumulated when job_acc[c]. out: (n_out, n_elm, n, n).
 
+    The coefficient k = term_coef[t] is, at the gauss point q = g * n_elm + e,
+    the sum in order of its parts p in coef_ptr[k]:coef_ptr[k + 1] (the
+    float64 values at part_address[p] + 8 * q * part_stride[p]; a stride 0
+    for a constant), multiplied by the gauss weight at coef_weight[k] + 8 * q
+    unless coef_weight[k] is 0: the operations of _WeightedCoef.values().
+
     The arrays are given by the address of their values: they must be C
-    contiguous float64 arrays of these shapes, kept alive by the caller. (A
-    list of arrays would be reference counted at each item access, which the
-    threads contend for.) The operations of a job are those of gauss_sum_atb,
-    in the same order, so the results are the same. The jobs are done chunk
-    of elements by chunk of elements, so that the operator values of a chunk
-    are read from memory once for all the jobs.
+    contiguous float64 arrays of these shapes (the parts: float64 values with
+    the given strides), kept alive by the caller. (A list of arrays would be
+    reference counted at each item access, which the threads contend for.)
+    The operations of a job are those of gauss_sum_atb, in the same order, so
+    the results are the same. The jobs are done chunk of elements by chunk of
+    elements, so that the operator values of a chunk are read from memory
+    once for all the jobs.
     """
     nb = n
     n_chunks = min(n_elm, 256)
@@ -136,10 +159,20 @@ def gauss_sum_atb_jobs(
             s[:, :, :] = 0.0
             for t in range(term_ptr[c], term_ptr[c + 1]):
                 a = carray(_float64_pointer(op_address[term_a[t]]), (n_gp, n_elm, n))
-                cf = carray(_float64_pointer(coef_address[term_coef[t]]), (n_gp, n_elm))
+                kc = term_coef[t]
+                p0 = coef_ptr[kc]
+                p1 = coef_ptr[kc + 1]
+                weight = coef_weight[kc]
                 for e in range(e0, e1):
                     for g in range(n_gp):
-                        c_ge = cf[g, e]
+                        q = g * n_elm + e
+                        c_ge = _load_float64(part_address[p0], q * part_stride[p0])
+                        for p in range(p0 + 1, p1):
+                            c_ge = c_ge + _load_float64(
+                                part_address[p], q * part_stride[p]
+                            )
+                        if weight != 0:
+                            c_ge = c_ge * _load_float64(weight, q)
                         for i in range(n):
                             s[e - e0, g, i] += c_ge * a[g, e, i]
             b = carray(_float64_pointer(op_address[job_b[c]]), (n_gp, n_elm, nb))

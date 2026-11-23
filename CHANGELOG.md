@@ -265,6 +265,16 @@ semantic versioning.
 - `fedoo[solver]` installs python-mumps instead of pypardiso on macOS (also
   on Intel Macs, where pypardiso does not work); pypardiso is kept for
   Linux and Windows x86_64.
+- **Assembly coefficients are weighted by the numba element kernel**: the
+  coefficient of a term (a tangent component, or the sum of the components that
+  share an operator pair) is no longer multiplied by the Gauss weights into a new
+  array before the element products; with numba the kernel reads the components
+  in place, also as strided views of the tangent matrix, sums them and applies
+  the weight in the same order of operations: same matrices as before bit for bit
+  (checked on arm64; the kernel keeps the same fused products). The weighted
+  array is still computed, when it is read, without numba, for lumped terms,
+  vector terms, terms scaled by a factor other than 1 (associated variables) and
+  coefficients that are not float64 arrays of Gauss point values.
 
 
 ### Fixed
