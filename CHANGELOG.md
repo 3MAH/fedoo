@@ -97,6 +97,17 @@ semantic versioning.
   rotations 1e-14). On 400 000 points: F and det F 0.017 s -> 0.005 s,
   matrix to rotation vector 0.22 s -> 0.009 s (4 threads).
 
+- **Material frames of an anisotropic law are resolved once per assembly.**
+  A constitutive update resolved `get_local_frame(assembly)` at the Gauss
+  points (validation, interpolation of nodal frames) four to six times. The
+  resolved frames are now kept on the assembly and reused while the law, its
+  frames (compared by value, so `LocalFrame.rotate` is seen), their location,
+  the mesh connectivity and the number of Gauss points are unchanged. The
+  public methods still return new writable arrays, and a law that overrides
+  `get_local_frame` or `get_current_local_frame` is not cached. Results are
+  unchanged bit for bit; the frames at the Gauss points (72 bytes per point)
+  and a copy of the connectivity now stay in memory with the assembly.
+
 - **`set_solver(symmetric=None)` is the default** (was `False`): with the
   direct solver of python-mumps, a symmetric-indefinite LDL^T factorization
   is used when every assembly of the problem is assembled with

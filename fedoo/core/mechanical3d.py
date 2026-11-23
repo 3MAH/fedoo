@@ -217,9 +217,61 @@ class Mechanical3D(ConstitutiveLaw):
             raise ValueError(f"got {len(frames)} material frames for {n_points} values")
         return np.asfortranarray(frames.transpose(1, 2, 0))
 
-    def _initial_material_frame(self, assembly):
-        """Return the supplied, unconvected frame at every integration point."""
-        frame = self.get_local_frame(assembly)
+    def _material_frames(self, assembly):
+        """``get_local_frame(assembly)`` as a read-only ``(n, 3, 3)`` array, or None.
+
+        The frames resolved at the Gauss points are kept on the assembly and
+        reused while everything the resolution depends on is unchanged: the
+        law, its frames (by value), their location, the mesh (number of
+        nodes, element type, connectivity) and the number of Gauss points
+        per element. Node coordinates are not used by the resolution.
+        """
+        if type(self).get_local_frame is not ConstitutiveLaw.get_local_frame:
+            # overridden in a subclass: the key below does not describe it
+            frames = self.get_local_frame(assembly)
+            return None if frames is None else np.asarray(frames).reshape(-1, 3, 3)
+        local_frame = self.local_frame
+        if local_frame is None:
+            return None
+        mesh = getattr(assembly, "mesh", None)
+        if mesh is None or not isinstance(local_frame, np.ndarray):
+            frames = self.get_local_frame(assembly)
+            return None if frames is None else np.asarray(frames).reshape(-1, 3, 3)
+        location = getattr(self, "_local_frame_location", None)
+        n_elm_gp = assembly.n_elm_gp
+        cache = getattr(assembly, "_material_frame_cache", None)
+        if (
+            cache is not None
+            and cache["law"] is self
+            and cache["location"] == location
+            and cache["mesh"] is mesh
+            and cache["n_nodes"] == mesh.n_nodes
+            and cache["elm_type"] == mesh.elm_type
+            and cache["n_elm_gp"] == n_elm_gp
+            and np.array_equal(cache["local_frame"], local_frame)
+            and np.array_equal(cache["elements"], mesh.elements)
+        ):
+            return cache["frames"]
+        frames = np.array(self.get_local_frame(assembly), dtype=float).reshape(-1, 3, 3)
+        frames.flags.writeable = False
+        assembly._material_frame_cache = dict(
+            law=self,
+            location=location,
+            mesh=mesh,
+            n_nodes=mesh.n_nodes,
+            elm_type=mesh.elm_type,
+            n_elm_gp=n_elm_gp,
+            local_frame=np.array(local_frame),
+            elements=np.array(mesh.elements),
+            frames=frames,
+        )
+        return frames
+
+    def _initial_frames(self, assembly):
+        """``_initial_material_frame`` without copy: the array may be read-only."""
+        frame = self._material_frames(assembly) if assembly is not None else None
+        if frame is None:
+            frame = self.get_local_frame(assembly) if assembly is None else None
         if frame is None:
             frame = np.eye(3)[None, ...]
         frame = np.asarray(frame, dtype=float).reshape(-1, 3, 3)
@@ -232,6 +284,11 @@ class Mechanical3D(ConstitutiveLaw):
             frame = np.repeat(frame, n_points, axis=0)
         return frame
 
+    def _initial_material_frame(self, assembly):
+        """Return the supplied, unconvected frame at every integration point."""
+        frame = self._initial_frames(assembly)
+        return frame if frame.flags.writeable else frame.copy()
+
     def get_current_local_frame(self, assembly=None):
         """Return the trial material frame in global coordinates.
 
@@ -241,6 +298,15 @@ class Mechanical3D(ConstitutiveLaw):
         laws such as Simcoon UMATs that manage this operation internally keep
         using the initial material basis.
         """
+        if assembly is not None and not getattr(assembly, "_nlgeom", False):
+            return self.get_local_frame(assembly)
+        frames = self._current_frames(assembly)
+        if frames is None or frames.flags.writeable:
+            return frames
+        return frames.copy()
+
+    def _current_frames(self, assembly):
+        """``get_current_local_frame`` without copy: the array may be read-only."""
         if assembly is None:
             return self.get_local_frame()
 
@@ -249,20 +315,20 @@ class Mechanical3D(ConstitutiveLaw):
             # Small strain has no evolving material orientation.  With no
             # user frame the material basis is already global, so returning
             # None avoids constructing and applying identity rotations.
-            return self.get_local_frame(assembly)
+            return self._material_frames(assembly)
         if self.is_isotropic and not has_user_frame:
             return None
 
-        base_frame = self._initial_material_frame(assembly)
-        if self.manages_material_frame:
-            return base_frame
-
         start_values = getattr(assembly, "sv_start", {})
-        start_frame = np.asarray(
-            start_values.get("_MaterialFrame", base_frame), dtype=float
-        ).reshape(-1, 3, 3)
+        start_frame = start_values.get("_MaterialFrame")
+        if self.manages_material_frame or start_frame is None:
+            base_frame = self._initial_frames(assembly)
+            if self.manages_material_frame:
+                return base_frame
+            start_frame = base_frame
+        start_frame = np.asarray(start_frame, dtype=float).reshape(-1, 3, 3)
         if "DR" not in assembly.sv:
-            current = start_frame
+            current = start_frame if start_frame.flags.writeable else start_frame.copy()
         else:
             increment = np.asarray(assembly.sv["DR"], dtype=float)
             if increment.shape[:2] == (3, 3):
@@ -296,12 +362,19 @@ class Mechanical3D(ConstitutiveLaw):
         return np.asarray(value, dtype=float)
 
     def _rotate_vector(self, value, assembly, kind, active, current=True):
-        frames = (
-            self.get_current_local_frame(assembly)
-            if current
-            else self.get_local_frame(assembly)
-        )
+        frames = self._frames(assembly, current)
         return self._rotate_vector_in(value, frames, kind, active)
+
+    def _frames(self, assembly, current=True):
+        """Frames of the public getters, without copy (may be read-only)."""
+        if current:
+            getter = type(self).get_current_local_frame
+            if getter is not Mechanical3D.get_current_local_frame:
+                return self.get_current_local_frame(assembly)
+            return self._current_frames(assembly)
+        if assembly is None:
+            return self.get_local_frame()
+        return self._material_frames(assembly)
 
     def _rotate_vector_in(self, value, frames, kind, active):
         """Change the basis of stress/strain Voigt vector(s) with explicit frames."""
@@ -334,11 +407,7 @@ class Mechanical3D(ConstitutiveLaw):
     def _rotate_H(self, H, assembly, active, current=True):
         H_array = np.asarray(H, dtype=float)
         n_values = self._data_point_count(H_array, tensor_order=4)
-        frames = (
-            self.get_current_local_frame(assembly)
-            if current
-            else self.get_local_frame(assembly)
-        )
+        frames = self._frames(assembly, current)
         if frames is None:
             return H
         frames = np.asarray(frames, dtype=float).reshape(-1, 3, 3)
@@ -366,7 +435,7 @@ class Mechanical3D(ConstitutiveLaw):
         """Change both axes of one or more 3x3 matrices to the initial basis."""
         if self.local_frame is None:
             return values
-        frames = self._initial_material_frame(assembly)
+        frames = self._initial_frames(assembly)
         matrices = np.asarray(values, dtype=float)
         single = matrices.ndim == 2
         fedoo_layout = matrices.ndim == 3 and matrices.shape[:2] == (3, 3)
@@ -791,14 +860,12 @@ class MechanicalUMAT(Mechanical3D):
         # law keeps the lab basis and the real DR.
         trial_frame = None
         if assembly._nlgeom and not self.manages_material_frame:
-            trial_frame = self.get_current_local_frame(assembly)
+            trial_frame = self._frames(assembly)
         if trial_frame is not None:
-            start_frame = np.asarray(
-                assembly.sv_start.get(
-                    "_MaterialFrame", self._initial_material_frame(assembly)
-                ),
-                dtype=float,
-            )
+            start_frame = assembly.sv_start.get("_MaterialFrame")
+            if start_frame is None:
+                start_frame = self._initial_frames(assembly)
+            start_frame = np.asarray(start_frame, dtype=float)
             # the frame follows the material: components in the committed frame are the
             # transported start state, components in the trial frame the end state
             strain_start = self._rotate_vector_in(
