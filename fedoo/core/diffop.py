@@ -93,6 +93,14 @@ class _Derivative:  # derivative operator used in DiffOp
             return NotImplemented
 
 
+def _sort_key(op):
+    """Key of an operator (a number or a _Derivative) that sorts as the
+    comparison operators of _Derivative do."""
+    if isinstance(op, _Derivative):
+        return (1, op.u_name, op.x, op.ordre)
+    return (0, op)
+
+
 def _mul_coef(a, b):
     """a * b for two coefficients (numbers or arrays), without the product
     when one of them is the number 1: the other one is returned as is, so
@@ -168,26 +176,22 @@ class DiffOp:
     def __mul__(self, A):
         #        if isinstance(A, SeparatedArray) and A.norm() == 0: return 0
         if isinstance(A, DiffOp):
-            res = DiffOp([], [], [])
+            op, op_vir, coef = [], [], []
             for ii in range(len(A.op)):
                 for jj in range(len(self.op)):
                     if (
                         A.op_vir[ii] == 1 and self.op[jj] == 1
                     ):  # si A contient un opérateur réel et self un virtuel
-                        res += DiffOp(
-                            [A.op[ii]],
-                            [self.op_vir[jj]],
-                            [_mul_coef(A.coef[ii], self.coef[jj])],
-                        )
+                        op.append(A.op[ii])
+                        op_vir.append(self.op_vir[jj])
+                        coef.append(_mul_coef(A.coef[ii], self.coef[jj]))
                     elif A.op[ii] == 1 and self.op_vir[jj] == 1:  # si c'est l'inverse
-                        res += DiffOp(
-                            [self.op[ii]],
-                            [A.op_vir[jj]],
-                            [_mul_coef(A.coef[ii], self.coef[jj])],
-                        )
+                        op.append(self.op[ii])
+                        op_vir.append(A.op_vir[jj])
+                        coef.append(_mul_coef(A.coef[ii], self.coef[jj]))
                     else:
                         raise NameError("Impossible operation")
-            return res
+            return DiffOp(op, op_vir, coef)
         else:  # isinstance(A, (Number, SeparatedArray)):
             if np.isscalar(A):
                 if A == 0:
@@ -240,15 +244,16 @@ class DiffOp:
             res += coef_str + op_vir_str + " " + op_str
         return res
 
-    def _getitem_sorting(self, item):
-        # coef not used for sorting: only return op and op_vir
-        return (self.op[item], self.op_vir[item])
-
     def sort(self):
-        sorted_indices = sorted(range(len(self)), key=self._getitem_sorting)
+        # plain tuple keys, same order as the _Derivative comparisons;
+        # coef is not used for sorting
+        keys = [
+            (_sort_key(op), _sort_key(op_vir))
+            for op, op_vir in zip(self.op, self.op_vir)
+        ]
+        sorted_indices = sorted(range(len(self)), key=keys.__getitem__)
         same_as_next = [
-            self._getitem_sorting(sorted_indices[i])
-            == self._getitem_sorting(sorted_indices[i + 1])
+            keys[sorted_indices[i]] == keys[sorted_indices[i + 1]]
             for i in range(0, len(self) - 1)
         ]
         self.coef = [self.coef[i] for i in sorted_indices]

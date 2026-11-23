@@ -265,6 +265,12 @@ semantic versioning.
 - `fedoo[solver]` installs python-mumps instead of pypardiso on macOS (also
   on Intel Macs, where pypardiso does not work); pypardiso is kept for
   Linux and Windows x86_64.
+- **`DiffOp.sort` and `DiffOp * DiffOp` are cheaper**: the sort compares plain
+  tuples instead of going through the `_Derivative` comparison operators, and the
+  product builds its term lists directly instead of summing one-term `DiffOp`
+  objects (quadratic in the number of terms). Same terms in the same order. The sort
+  runs at every matrix assembly, the product each time a weak form rebuilds its
+  differential operator.
 
 
 ### Fixed
