@@ -14,3 +14,5 @@ The runner accepts pytest arguments and finds the viewer tests independently
 of the current working directory. You can also use `pytest tests/viewer`.
 The GUI fixtures use Qt's offscreen platform and require a Qt binding even
 when no visible windows are shown.
+On macOS the tests run on the native platform instead (`conftest.py`): VTK
+cannot render in the windows of the offscreen platform there.

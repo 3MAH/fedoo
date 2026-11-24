@@ -158,7 +158,7 @@ def test_history_picking_maps_display_ids_and_stops_after_pick(
                 GetCellId=lambda: 0,
                 GetActor=lambda: None,
             )
-            monkeypatch.setattr(viewer.vtk, "vtkCellPicker", lambda: picker)
+            monkeypatch.setattr(viewer, "vtkCellPicker", lambda: picker)
             monkeypatch.setattr(
                 window.active_dock,
                 "picked_actor_mesh",
