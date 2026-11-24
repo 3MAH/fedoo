@@ -39,7 +39,8 @@ def _apply_slave_disp(problem, list_nodes, center, disp_ref, rotation, disp_indi
     (2D rotation matrix); ``rotation`` and ``center`` carry the dimension.
     Returns the computed slave displacement.
     """
-    nodes = problem.mesh.nodes[list_nodes]
+    # plain ndarray (avoid the overhead of array subclasses such as pyvista)
+    nodes = np.asarray(problem.mesh.nodes)[list_nodes]
     new_disp = (nodes - center) @ rotation.T + center + disp_ref - nodes
     if not np.array_equal(problem._dU, 0):
         if np.array_equal(problem._U, 0):
@@ -131,6 +132,7 @@ class RigidTie(BCBase):
         self.center = center
         self.use_quaternion = bool(use_quaternion)
         self.bc_type = "RigidTie"
+        self._rotation_cache = None  # last result of _compute_rotation
         BCBase.__init__(self, name)
         self._keep_at_end = True
 
@@ -196,9 +198,34 @@ class RigidTie(BCBase):
         return _resolve_rigid_dofs(problem, self.var_cd, self.node_cd, 6)
 
     def _compute_rotation(self, rotvec):
-        """Return the orientation and exact derivatives for the active mode."""
+        """Return the orientation and exact derivatives for the active mode.
+
+        The same rotation is requested several times per Newton-Raphson
+        iteration (constraint, contact, inertia), so the result of the last
+        call is kept. The cache key is the rotation vector, the rotation mode
+        and, in quaternion mode, the converged orientation (``_Q_base``
+        object and ``_angles_at_base`` values). The returned arrays are
+        read-only.
+        """
         rotvec = np.asarray(rotvec, dtype=float)
-        if self.use_quaternion and hasattr(self, "_Q_base"):
+        quaternion = self.use_quaternion and hasattr(self, "_Q_base")
+        if quaternion:
+            angles_at_base = np.asarray(self._angles_at_base)
+            key = (
+                rotvec.shape,
+                rotvec.tobytes(),
+                angles_at_base.shape,
+                angles_at_base.tobytes(),
+            )
+            q_base = self._Q_base
+        else:
+            key = (rotvec.shape, rotvec.tobytes())
+            q_base = None
+        cache = getattr(self, "_rotation_cache", None)
+        if cache is not None and cache[0] == key and cache[1] is q_base:
+            return cache[2]
+
+        if quaternion:
             increment = rotvec - self._angles_at_base
             if not np.all(np.isfinite(increment)):
                 increment = np.zeros(3)
@@ -210,12 +237,16 @@ class RigidTie(BCBase):
         R_increment = Rotation.from_rotvec(increment).as_matrix()
         derivatives = dR_drotvec(increment)
         R = R_increment @ R_base
-        return (
+        res = (
             R,
             derivatives[:, :, 0] @ R_base,
             derivatives[:, :, 1] @ R_base,
             derivatives[:, :, 2] @ R_base,
         )
+        for array in res:
+            array.flags.writeable = False
+        self._rotation_cache = (key, q_base, res)
+        return res
 
     def _compute_slave_disp(self, problem, disp_ref, R):
         """Update slave-node displacements for a given rigid motion."""
@@ -233,7 +264,8 @@ class RigidTie(BCBase):
         consistent.
 
         Returns ``(R, du_drx, du_dry, du_drz)`` where each derivative array has
-        the same shape as ``points``.
+        the same shape as ``points``. ``R`` is read-only: copy it before any
+        in-place modification.
         """
         R, dR_drx, dR_dry, dR_drz = self._compute_rotation(rotvec)
         rel = np.asarray(points, dtype=float) - self.center

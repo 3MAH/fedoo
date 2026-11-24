@@ -115,6 +115,15 @@ semantic versioning.
 
 ### Changed
 
+- **``RigidTie`` keeps the last rotation it computed.** The rotation matrix and
+  its derivatives are requested several times per Newton-Raphson iteration
+  (constraint, contact, inertia) with the same rotation vector; the last result
+  is now returned again, as read-only arrays, until the rotation vector, the
+  rotation mode or the converged orientation changes. The rigid-body contact
+  data and the slave displacements are computed on plain ``ndarray`` instead of
+  pyvista arrays. Same results bit for bit; the rigid-body bounce and free-fall
+  examples run 13 % and 17 % faster (one thread, Apple silicon Mac).
+
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to
