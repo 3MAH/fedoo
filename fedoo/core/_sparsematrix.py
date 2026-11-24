@@ -18,11 +18,15 @@ try:  # optional compiled kernels, used when numba is installed
         elementary_operator_values as _elementary_operator_values_numba,
     )
     from fedoo.core._numba_kernels import take as _take_numba
+    from fedoo.core._numba_kernels import (
+        change_of_basis_element_matrices as _change_of_basis_numba,
+    )
     from fedoo.core._numba_kernels import csr_matvec_multi as _csr_matvec_multi_numba
     import numba as _numba
 except ImportError:
     _elementary_operator_values_numba = None
     _take_numba = None
+    _change_of_basis_numba = None
     _csr_matvec_multi_numba = None
     _gauss_sum_atb_numba = None
     _gather_sum_numba = None
@@ -1050,6 +1054,175 @@ class _BlocSparse:
         )
         res.has_sorted_indices = True
         return res
+
+    def _tocsr_change_of_basis(self, mat_cb, n_nodes):
+        """mat_cb.T @ self.tocsr() @ mat_cb, for the change of basis matrix
+        mat_cb of an assembly (local element dofs -> global node dofs), as
+        the element matrices rotated element by element (numba) and summed
+        on the global csr pattern. The sums are not done in the order of the
+        sparse products: the values agree to rounding only. The pattern is
+        the structural one, shared between calls; exact zeros are removed
+        only when they are more than a tenth of it (frames along the axes).
+
+        Applies when each local dof (row of mat_cb) is related to the global
+        variables of a single node, as for the beam, plate and interface
+        elements. None if not applicable.
+        """
+        if self.isempty or _change_of_basis_numba is None or _gather_sum_numba is None:
+            return None
+        self._flush()
+        computed, layout = self._sources()
+        sources = [self.data[i][j] for i, j in computed]
+        if (
+            not sources
+            or not sparse.issparse(mat_cb)
+            or mat_cb.format != "csr"
+            or mat_cb.dtype != np.float64
+            or self.nbBlocRow != self.nbBlocCol
+            or self.blocShape[0] != self.blocShape[1]
+            or mat_cb.shape[0] != self.nbBlocRow * self.blocShape[0]
+            or mat_cb.shape[1] < self.nbBlocRow * n_nodes
+            or any(
+                s.dtype != np.float64
+                or s.ndim != 3
+                or s.shape != sources[0].shape
+                or s.size != len(self.row)
+                for s in sources
+            )
+            or sources[0].shape[1] != sources[0].shape[2]
+        ):
+            return None
+        key = ("change_of_basis", layout, n_nodes, mat_cb.shape)
+        structure = self._gather_cache.get(key)
+        if structure is None or not (
+            np.array_equal(structure["indptr_cb"], mat_cb.indptr)
+            and np.array_equal(structure["indices_cb"], mat_cb.indices)
+        ):
+            structure = self._change_of_basis_structure(
+                layout, mat_cb, n_nodes, *sources[0].shape[:2]
+            )
+            if structure is None:
+                return None
+            self._gather_cache[key] = structure
+
+        if not len(structure["out_i"]):
+            return None
+        values = np.append(mat_cb.data, 0.0)  # index -1: no coefficient
+        rot_p = values[structure["pos_p"]]
+        rot_q = rot_p if structure["pos_q"] is None else values[structure["pos_q"]]
+        n_elm, n = sources[0].shape[:2]
+        out_i, out_j = structure["out_i"], structure["out_j"]
+        out = np.empty((len(out_i), n_elm, n, n))
+        # element matrices: C contiguous float64 arrays, alive during the call
+        sources = [np.ascontiguousarray(s) for s in sources]
+        src, ptr, indices, indptr = structure["gather"]
+        data = np.empty(len(indices))
+        with _numba_threads(out.size):
+            _change_of_basis_numba(
+                np.array([s.ctypes.data for s in sources], dtype=np.int64),
+                structure["comp"],
+                structure["trans"],
+                structure["grp_ptr"],
+                structure["grp_idx"],
+                rot_p,
+                rot_q,
+                out_i,
+                out_j,
+                out,
+            )
+            _gather_sum_numba(tuple(o.reshape(-1) for o in out), src, ptr, data)
+        n_dof = mat_cb.shape[1]
+        if n_dof > len(indptr) - 1:  # global dofs: empty rows
+            indptr = np.concatenate(
+                (indptr, np.full(n_dof - len(indptr) + 1, indptr[-1], indptr.dtype))
+            )
+        many_zeros = 10 * np.count_nonzero(data) < 9 * len(data)
+        if many_zeros:  # eliminate_zeros works in place: not on the cached pattern
+            indices, indptr = indices.copy(), indptr.copy()
+        res = sparse.csr_matrix(
+            (data, indices, indptr), shape=(n_dof, n_dof), copy=False
+        )
+        res.has_sorted_indices = True
+        if many_zeros:
+            res.eliminate_zeros()
+        return res
+
+    def _change_of_basis_structure(self, layout, mat_cb, n_nodes, n_elm, n):
+        """Data of _tocsr_change_of_basis that depend only on the patterns,
+        None if the change of basis does not relate each local dof to a
+        single node."""
+        nvar = self.nbBlocRow
+        n_bloc = self.blocShape[0]
+        # local row (column) of the bloc for each row p (column q) of an
+        # element matrix
+        row = self.row.reshape(n_elm, n, n)
+        col = self.col.reshape(n_elm, n, n)
+        r_p, c_q = row[:, :, 0], col[:, 0, :]
+        if not (
+            np.array_equal(row, np.broadcast_to(r_p[:, :, None], row.shape))
+            and np.array_equal(col, np.broadcast_to(c_q[:, None, :], col.shape))
+        ):
+            return None
+
+        # mat_cb entries: local dof i * n_bloc + r -> global dof I * n_nodes + node
+        local = np.repeat(np.arange(mat_cb.shape[0]), np.diff(mat_cb.indptr))
+        if np.any(mat_cb.indices >= nvar * n_nodes):
+            return None
+        i_loc, r = np.divmod(local, n_bloc)
+        i_glob, node = np.divmod(mat_cb.indices.astype(np.int64), n_nodes)
+        node_of = np.full(n_bloc, -1, dtype=np.int64)
+        node_of[r] = node
+        if (
+            np.any(node_of[r] != node)
+            or np.any(node_of[r_p] < 0)
+            or np.any(node_of[c_q] < 0)
+        ):
+            return None  # a local dof related to several nodes, or to none
+        pos = np.full((n_bloc, nvar, nvar), -1, dtype=np.int64)
+        pos[r, i_loc, i_glob] = np.arange(len(local))
+        if np.count_nonzero(pos >= 0) != len(local):
+            return None  # duplicated entries
+        pos_p = pos[r_p]
+        pos_q = None if np.array_equal(r_p, c_q) else pos[c_q]
+
+        # local variables related to each global variable, local blocs
+        related = (pos >= 0).any(axis=0)  # related[i, I]
+        grp_ptr = np.zeros(nvar + 1, dtype=np.int64)
+        grp_ptr[1:] = np.cumsum(related.sum(axis=0))
+        grp_idx = np.concatenate(
+            [np.flatnonzero(related[:, gi]) for gi in range(nvar)]
+        ).astype(np.int64)
+        comp = np.full((nvar, nvar), -1, dtype=np.int64)
+        trans = np.zeros((nvar, nvar), dtype=np.bool_)
+        for i, j, k, t in layout:
+            comp[i, j], trans[i, j] = k, t
+
+        # global blocs: (I, J) related to a non empty local bloc. All are
+        # computed: with assume_sym the local diagonal blocs may not be symmetric.
+        nonzero = (related.T.astype(int) @ (comp >= 0) @ related.astype(int)) > 0
+        out_i, out_j = np.nonzero(nonzero)
+        layout_g = tuple(
+            (int(gi), int(gj), o, False) for o, (gi, gj) in enumerate(zip(out_i, out_j))
+        )
+
+        # global csr pattern: element matrices on the node rows and columns
+        bloc_g = _BlocSparse(nvar, nvar, self.nbpg)
+        bloc_g.row = node_of[self.row]
+        bloc_g.col = node_of[self.col]
+        bloc_g.blocShape = (n_nodes, n_nodes)
+        return {
+            "indptr_cb": mat_cb.indptr.copy(),
+            "indices_cb": mat_cb.indices.copy(),
+            "pos_p": pos_p,
+            "pos_q": pos_q,
+            "grp_ptr": grp_ptr,
+            "grp_idx": grp_idx,
+            "comp": comp,
+            "trans": trans,
+            "out_i": out_i.astype(np.int64),
+            "out_j": out_j.astype(np.int64),
+            "gather": bloc_g._gather_structure(layout_g, n, n),
+        }
 
     def get_BlocStructure(self):
         # return data that may be reuse with other blocsparse

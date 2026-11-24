@@ -69,6 +69,67 @@ def gather_sum(sources, src, ptr, out):
         out[k] = s
 
 
+@njit(parallel=True, cache=True, fastmath={"contract"})
+def change_of_basis_element_matrices(
+    address, comp, trans, grp_ptr, grp_idx, rot_p, rot_q, out_i, out_j, out
+):
+    """Element matrices in the global basis from those in the local basis.
+
+    out[o, e, p, q] = sum_j (sum_i rot_p[e, p, i, I] K_ij[e, p, q]) rot_q[e, q, j, J]
+    with (I, J) = (out_i[o], out_j[o]), i in grp_idx[grp_ptr[I]:grp_ptr[I + 1]]
+    and j in grp_idx[grp_ptr[J]:grp_ptr[J + 1]] (the local variables that the
+    rotations relate to I and J), in that order. K_ij is the C contiguous
+    float64 array (n_elm, n, n) of element matrices at address[comp[i, j]]
+    (kept alive by the caller), transposed if trans[i, j], zero if
+    comp[i, j] < 0. rot_p[e, p, i, I]: coefficient of the global variable I in
+    the local variable i at the node of the row p of the element e (rot_q: of
+    the column q). The local matrix is multiplied by the rotations on the left
+    first, as in mat_cb.T @ A @ mat_cb.
+    """
+    n_elm = rot_p.shape[0]
+    n = rot_p.shape[1]
+    nvar = comp.shape[0]
+    n_chunks = min(n_elm, 256)
+    for chunk in prange(n_chunks):
+        e0 = n_elm * chunk // n_chunks
+        e1 = n_elm * (chunk + 1) // n_chunks
+        s = np.empty((n, n))
+        # t[I, j] = sum_i rot_p[e, :, i, I] K_ij[e]: the left products
+        t = np.empty((nvar, nvar, n, n))
+        for e in range(e0, e1):
+            for gi in range(nvar):
+                for j in range(nvar):
+                    t[gi, j, :, :] = 0.0
+                    for ii in range(grp_ptr[gi], grp_ptr[gi + 1]):
+                        i = grp_idx[ii]
+                        c = comp[i, j]
+                        if c < 0:
+                            continue
+                        k = carray(_float64_pointer(address[c]), (n_elm, n, n))
+                        if trans[i, j]:
+                            for p in range(n):
+                                r = rot_p[e, p, i, gi]
+                                for q in range(n):
+                                    t[gi, j, p, q] += r * k[e, q, p]
+                        else:
+                            for p in range(n):
+                                r = rot_p[e, p, i, gi]
+                                for q in range(n):
+                                    t[gi, j, p, q] += r * k[e, p, q]
+            for o in range(len(out_i)):
+                gi = out_i[o]
+                gj = out_j[o]
+                s[:, :] = 0.0
+                for jj in range(grp_ptr[gj], grp_ptr[gj + 1]):
+                    j = grp_idx[jj]
+                    for p in range(n):
+                        for q in range(n):
+                            s[p, q] += t[gi, j, p, q] * rot_q[e, q, j, gj]
+                for p in range(n):
+                    for q in range(n):
+                        out[o, e, p, q] = s[p, q]
+
+
 @njit(parallel=True, cache=True)
 def csr_matvec(indptr, indices, data, x, out):
     """out = A @ x for the csr matrix A = (data, indices, indptr), by rows."""

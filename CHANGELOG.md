@@ -289,6 +289,19 @@ semantic versioning.
 - **Change of basis matrix of beams, plates and interface elements**: the row
   and column indices are kept on the mesh while its element table is unchanged,
   and the conversion to csr reuses its cached pattern. Same matrix.
+- **Global matrix of beams, plates and interface elements** (numba): the
+  element matrices are rotated to the global basis one by one and summed on the
+  global pattern, instead of two sparse products by the change of basis matrix.
+  The sums are not made in the same order: the matrix agrees with the previous
+  one to rounding (relative difference of a few 1e-16), which a badly
+  conditioned linear problem amplifies in the solution. The pattern is the
+  structural one and is the same from one assembly to the next; exact zeros
+  are removed only when they are more than a tenth of the entries (frames
+  along the axes). Without numba, and when a local degree of freedom is
+  related to several nodes, the sparse products are used as before.
+- **Gauss point to node conversion with `method="l2"`**: the mass matrix is
+  factorized with a symmetric ordering (much less fill-in) and all the
+  components are solved together. Same values to rounding.
 
 
 ### Fixed

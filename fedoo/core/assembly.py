@@ -646,9 +646,17 @@ class Assembly(AssemblyBase):
 
             if compute != "vector":
                 if use_change_of_basis:
-                    self.global_matrix = (
-                        mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis
-                    )  # format csr
+                    global_matrix = None
+                    if isinstance(MM, BlocSparse):
+                        # element matrices rotated element by element
+                        global_matrix = MM._tocsr_change_of_basis(
+                            mat_change_of_basis, self.mesh.n_nodes
+                        )
+                    if global_matrix is None:
+                        global_matrix = (
+                            mat_change_of_basis.T * MM.tocsr() * mat_change_of_basis
+                        )
+                    self.global_matrix = global_matrix  # format csr
                 else:
                     self.global_matrix = MM.tocsr()  # format csr
                     if global_mat_resize:
