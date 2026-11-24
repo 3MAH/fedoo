@@ -1,4 +1,5 @@
-import vtk
+from vtkmodules.vtkCommonCore import vtkIdList
+from vtkmodules.vtkRenderingCore import vtkCellPicker
 from fedoo.util.beam_recovery import BeamOptions, SavedBeamSection, stored_point_indices
 from fedoo.util.shell_recovery import (
     ShellOptions,
@@ -146,7 +147,7 @@ def _picked_node_value(dock, point, picker):
     if dock.current_data_type == "Element":
         if "Data" not in mesh.cell_data:
             return node_id, None, None
-        cells = vtk.vtkIdList()
+        cells = vtkIdList()
         mesh.GetPointCells(displayed_id, cells)
         values = mesh.cell_data["Data"][
             [cells.GetId(i) for i in range(cells.GetNumberOfIds())]
@@ -3988,7 +3989,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _pick_element(self, on_pick=None):
         self._stop_element_picking()
         self.plotter.disable_picking()
-        picker = vtk.vtkCellPicker()
+        picker = vtkCellPicker()
         picker.SetTolerance(0.0005)
 
         def _on_click(obj, event):

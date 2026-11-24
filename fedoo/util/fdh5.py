@@ -80,6 +80,10 @@ with the root attribute ``fedoo_requires_zstd`` so readers can explain a
 missing dependency before accessing compressed arrays. This marker remains
 set when later frames use another codec. The FDH5 layout is unchanged.
 
+Large gzip arrays of floats are compressed and decompressed chunk by chunk in
+threads (``fedoo.get_config()["N_THREADS"]``; 0 uses at most 8 threads, 1 keeps
+HDF5's serial filter). The chunks and the arrays read are those of HDF5.
+
 Live viewing uses short, sequential read/write access with HDF5 locking
 enabled. Writers retry temporary lock conflicts for up to 10 seconds by
 default; readers retry for up to 0.2 seconds. Eager mesh/frame reads copy all
@@ -94,16 +98,27 @@ from __future__ import annotations
 import h5py
 from fedoo.core.mesh import Mesh, MultiMesh
 
+try:
+    # the chunk shape h5py chooses for chunks=True
+    from h5py._hl.filters import guess_chunk as _guess_chunk
+except ImportError:  # pragma: no cover - h5py internals moved
+    _guess_chunk = None
+
 
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Union, Any, Literal, List, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
+import itertools
 import json
 import errno
 import importlib
+import os
+import threading
 import time as _time
+import zlib
 
 import numpy as np
 from fedoo.util.frame_fields import (
@@ -112,6 +127,174 @@ from fedoo.util.frame_fields import (
     encode_frames,
     FRAME_ENCODINGS,
 )
+
+
+# Smaller float datasets are deflated/inflated by HDF5 itself: dispatching
+# their chunks to threads costs more than it saves.
+_PARALLEL_DEFLATE_MIN_BYTES = 1 << 16
+_PARALLEL_INFLATE_MIN_BYTES = 1 << 18
+_DEFAULT_IO_THREADS = None
+# Worker threads of the FDH5 reads and writes, one pool per (pid, size),
+# never shut down: another thread or a forked child may still use it.
+_POOLS = {}
+_POOL_LOCK = threading.Lock()
+
+
+def _io_threads():
+    """Number of threads used to deflate/inflate FDH5 chunks.
+
+    fedoo's ``N_THREADS`` if set (1 keeps HDF5's own serial filter), else at
+    most 8 and at most the performance cores of a hybrid chip.
+    """
+    global _DEFAULT_IO_THREADS
+    from fedoo.core import base
+
+    if base.N_THREADS > 0:
+        return base.N_THREADS
+    if _DEFAULT_IO_THREADS is None:
+        from fedoo.core._sparsematrix import _performance_cores
+
+        _DEFAULT_IO_THREADS = max(
+            1, min(8, _performance_cores() or os.cpu_count() or 1)
+        )
+    return _DEFAULT_IO_THREADS
+
+
+def _executor(n_threads):
+    """The shared thread pool of this size for the current process."""
+    key = (os.getpid(), n_threads)
+    with _POOL_LOCK:
+        pool = _POOLS.get(key)
+        if pool is None:
+            pool = _POOLS[key] = ThreadPoolExecutor(
+                n_threads, thread_name_prefix="fedoo-fdh5"
+            )
+        return pool
+
+
+def _split_jobs(jobs, n_parts):
+    """Split a list into at most n_parts contiguous, nonempty slices."""
+    n_parts = max(1, min(n_parts, len(jobs)))
+    bounds = np.linspace(0, len(jobs), n_parts + 1).astype(int)
+    return [jobs[a:b] for a, b in zip(bounds[:-1], bounds[1:])]
+
+
+def _deflate_ok(data, kwargs, n_threads):
+    """Whether a new dataset can be deflated in parallel, chunk by chunk.
+
+    Only plain gzip datasets of native float data take this path; the
+    chunks are then exactly the bytes HDF5's own deflate filter writes
+    (same zlib, same level), so the file is unchanged.
+    """
+    return (
+        n_threads > 1
+        and _guess_chunk is not None
+        and kwargs.get("compression") == "gzip"
+        and kwargs.get("chunks", True) is not False
+        and data.ndim > 0
+        and data.nbytes >= _PARALLEL_DEFLATE_MIN_BYTES
+        and data.dtype.kind == "f"
+        and data.dtype.isnative
+    )
+
+
+def _create_deflated_dataset(parent, name, data, kwargs, n_threads):
+    """Create a gzip dataset, deflating its chunks in a thread pool.
+
+    zlib releases the GIL, so the chunks compress in parallel; they are then
+    written in HDF5's own chunk order with ``write_direct_chunk``. Edge chunks
+    are padded with the default fill value (0), as HDF5 does. All the chunks
+    are compressed before the dataset is created: a compression error
+    propagates and leaves no dataset. A failing write leaves the dataset
+    partially written, as h5py's ``create_dataset(name, data=...)`` does.
+    """
+    chunks = kwargs.get("chunks")
+    if chunks is None or chunks is True:
+        chunks = _guess_chunk(data.shape, None, data.dtype.itemsize)
+    chunks = tuple(chunks)
+    level = kwargs.get("compression_opts")
+    level = 4 if level is None else int(level)
+    offsets = list(
+        itertools.product(*(range(0, n, c) for n, c in zip(data.shape, chunks)))
+    )
+
+    def deflate(part):
+        out = []
+        for offset in part:
+            block = data[tuple(slice(o, o + c) for o, c in zip(offset, chunks))]
+            if block.shape != chunks:
+                full = np.zeros(chunks, dtype=data.dtype)
+                full[tuple(slice(0, n) for n in block.shape)] = block
+                block = full
+            out.append(zlib.compress(np.ascontiguousarray(block).tobytes(), level))
+        return out
+
+    parts = _split_jobs(offsets, n_threads)
+    # Raises the first worker error, if any, before anything is created.
+    compressed = list(_executor(n_threads).map(deflate, parts))
+
+    ds = parent.create_dataset(name, shape=data.shape, dtype=data.dtype, **kwargs)
+    if ds.chunks != chunks:  # h5py chose another layout: let HDF5 write it
+        ds[...] = data
+        return ds
+    for part, buffers in zip(parts, compressed):
+        for offset, buffer in zip(part, buffers):
+            ds.id.write_direct_chunk(offset, buffer)
+    return ds
+
+
+def _inflate_ok(ds, n_threads):
+    """Whether a dataset can be read by inflating its chunks in parallel."""
+    if n_threads <= 1:
+        return False
+    try:
+        dtype = ds.dtype
+        return (
+            dtype.kind == "f"
+            and dtype.isnative
+            and ds.size * dtype.itemsize >= _PARALLEL_INFLATE_MIN_BYTES
+            and ds.chunks is not None
+            and ds.compression == "gzip"
+            and ds.id.get_create_plist().get_nfilters() == 1
+            and hasattr(ds.id, "read_direct_chunk")
+            and hasattr(ds.id, "get_num_chunks")
+        )
+    except Exception:
+        return False
+
+
+def _read_inflated(datasets, n_threads):
+    """Read gzip datasets: raw chunks read serially, inflated in parallel.
+
+    Return a dict id(dataset) -> array for the datasets read this way. A
+    dataset with unallocated chunks is left to h5py.
+    """
+    jobs = []
+    arrays = {}
+    for ds in datasets:
+        chunks = ds.chunks
+        grid = [range(0, n, c) for n, c in zip(ds.shape, chunks)]
+        if ds.id.get_num_chunks() != np.prod([len(r) for r in grid]):
+            continue
+        out = np.empty(ds.shape, dtype=ds.dtype)
+        arrays[id(ds)] = out
+        for offset in itertools.product(*grid):
+            mask, buffer = ds.id.read_direct_chunk(offset)
+            jobs.append((out, chunks, offset, mask, buffer))
+
+    def inflate(part):
+        for out, chunks, offset, mask, buffer in part:
+            if not mask & 1:  # bit 0 set: the deflate filter was skipped
+                buffer = zlib.decompress(buffer)
+            block = np.frombuffer(buffer, dtype=out.dtype).reshape(chunks)
+            region = tuple(
+                slice(o, min(o + c, n)) for o, c, n in zip(offset, chunks, out.shape)
+            )
+            out[region] = block[tuple(slice(0, s.stop - s.start) for s in region)]
+
+    if jobs:
+        list(_executor(n_threads).map(inflate, _split_jobs(jobs, n_threads)))
+    return arrays
 
 
 def _write_metadata_tree(group, values):
@@ -182,11 +365,25 @@ def _open_hdf5(path, mode, lock_timeout):
             _time.sleep(min(0.05, remaining))
 
 
-def _materialize_hdf5(value):
+def _materialize_hdf5(value, _inflated=None):
     """Copy an eager result before releasing its shared read lock."""
+    if _inflated is None:
+        # large gzip datasets are inflated in parallel, all at once
+        n_threads = _io_threads()
+        datasets, stack = [], [value] if n_threads > 1 else []
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                stack.extend(item.values())
+            elif isinstance(item, h5py.Dataset) and _inflate_ok(item, n_threads):
+                datasets.append(item)
+        _inflated = _read_inflated(datasets, n_threads) if datasets else {}
     if isinstance(value, dict):
-        return {key: _materialize_hdf5(item) for key, item in value.items()}
-    return value[...] if isinstance(value, h5py.Dataset) else value
+        return {key: _materialize_hdf5(item, _inflated) for key, item in value.items()}
+    if isinstance(value, h5py.Dataset):
+        array = _inflated.get(id(value))
+        return value[...] if array is None else array
+    return value
 
 
 def submesh_id(index: int) -> str:
@@ -543,7 +740,11 @@ class FDH5Writer:
         is_scalar = np.asarray(data).shape == ()
         kwargs = {} if is_scalar else self._compression_kwargs
 
-        ds = parent.create_dataset(name, data=data, **kwargs)
+        n_threads = _io_threads() if isinstance(data, np.ndarray) else 1
+        if _deflate_ok(data, kwargs, n_threads):
+            ds = _create_deflated_dataset(parent, name, data, kwargs, n_threads)
+        else:
+            ds = parent.create_dataset(name, data=data, **kwargs)
         for key, value in attributes.items():
             ds.attrs[key] = value
         if attributes:
@@ -1502,6 +1703,25 @@ def write_dataset(
     fdh5_options=None,
 ):
     """Write a Fedoo DataSet iteration to a FDH5 file."""
+    _write_dataset(dataset, filename, iteration, overwrite, compressed, fdh5_options)
+
+
+def _write_dataset(
+    dataset,
+    filename: str,
+    iteration: int = 0,
+    overwrite: bool = False,
+    compressed: bool | None = None,
+    fdh5_options=None,
+    writer: FDH5Writer | None = None,
+) -> FDH5Writer:
+    """Same as :func:`write_dataset`, returning the writer used.
+
+    The writer of a previous call may be given to write the next frames of
+    the same file: while that file exists its header is already written, so
+    the file is opened once per frame instead of twice. A new writer is made
+    otherwise (file removed, other file or other options).
+    """
 
     if dataset.mesh is None:
         raise TypeError("Mesh should be defined before writing a FDH5 file.")
@@ -1517,7 +1737,13 @@ def write_dataset(
         path.unlink()
         file_exists = False
 
-    writer = FDH5Writer(path, fdh5_options=options)
+    if (
+        writer is None
+        or not file_exists
+        or writer.path != path
+        or writer.options != options
+    ):
+        writer = FDH5Writer(path, fdh5_options=options)
     if not file_exists:
         writer.write_mesh(
             dataset.mesh.nodes,
@@ -1554,6 +1780,7 @@ def write_dataset(
         time=time,
         overwrite=True,
     )
+    return writer
 
 
 def read_fdh5(filename: str):

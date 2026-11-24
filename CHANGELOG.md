@@ -182,6 +182,17 @@ semantic versioning.
   default gzip level 4, but honors explicit `False` and integer levels instead
   of ignoring the option. Other formats supporting the boolean compression
   option now also default to compressed output.
+- **FDH5 gzip arrays are compressed and decompressed in parallel**: float
+  arrays of at least 64 KiB are deflated chunk by chunk in a thread pool and
+  written with HDF5's own chunk layout, and those of at least 256 KiB are
+  inflated in parallel by the eager readers (`read_data`, `load`,
+  `get_history`, viewer). Same chunks and same arrays read; other filters
+  (Zstandard, lzf), integers and small arrays go through HDF5 as before. The
+  threads follow `N_THREADS` (0: at most 8; 1: HDF5's serial path).
+- Outputs saved by a problem open their FDH5 file once per frame instead of
+  twice.
+- `import fedoo` no longer loads the whole VTK library for the viewer (only the
+  two classes it uses).
 - Automatic beam/shell tangent switching tracks significant improvement
   against a reference error so oscillations do not conceal stagnation. Switching
   resets the progress counters, and adaptive stiffness gets an opportunity to

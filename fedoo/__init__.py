@@ -82,7 +82,8 @@ class get_config:
         * 'N_THREADS': int, number of threads of the simcoon batch calls (constitutive
           laws, objective rates, tangent conversions) and of the numba kernels of
           the assembly. 0 (default) uses all the cores (the performance cores of an
-          Apple chip for numba), 1 runs them serially.
+          Apple chip for numba), 1 runs them serially. Also the threads that
+          compress and decompress the gzip arrays of FDH5 files (0: at most 8).
 
     To change a configuration option use fedoo.get_config()[option] = value
     To print the current configuration use: fedoo.show_config()

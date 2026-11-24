@@ -5,7 +5,7 @@ from fedoo.util.beam_recovery import (
     SectionRecoveryUnavailable,
 )
 from fedoo.util.frame_fields import FRAME_NAMES
-from fedoo.util.fdh5 import resolve_fdh5_options, FDH5Reader
+from fedoo.util.fdh5 import resolve_fdh5_options, FDH5Reader, _write_dataset
 
 import numpy as np
 
@@ -1289,11 +1289,14 @@ class _ProblemOutput:
                     raise FileExistsError(
                         f"Output file already exists: {list_full_filename[i]}"
                     )
-                out.to_fdh5(
+                # the writer is kept: the next frames open the file once
+                state["writer"] = _write_dataset(
+                    out,
                     list_full_filename[i],
                     iteration=iteration,
                     overwrite=(first_write and state["write_mode"] == "overwrite"),
                     fdh5_options=list_fdh5_options[i],
+                    writer=state.get("writer"),
                 )
                 self.data_sets[list_filename[i]].list_data.append(
                     ("fdh5", list_full_filename[i], iteration)
