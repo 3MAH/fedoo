@@ -54,7 +54,7 @@ def structured_mesh_2D(
         if data.elements is None:
             elm = []
         else:
-            elm = list(data.elements)
+            elm = [np.asarray(data.elements)]
             elm_type = data.elm_type
         crd = data.nodes
         if name == "":
@@ -69,14 +69,14 @@ def structured_mesh_2D(
     x2 = crd[edge2]
     x3 = crd[edge3]
     x4 = crd[edge4]
-    new_crd = list(crd.copy())
+    new_crd = [crd]  # blocks of node coordinates
     grid = np.empty((len(x1), len(x2)))
     grid[0, :] = edge4
     grid[-1, :] = edge2
     grid[:, 0] = edge1
     grid[:, -1] = edge3
 
-    N = len(new_crd)
+    N = len(crd)
     coef1 = np.linspace(0, 1, len(x1)).reshape(-1, 1)
     coef2 = np.linspace(0, 1, len(x2)).reshape(-1, 1)
 
@@ -117,22 +117,24 @@ def structured_mesh_2D(
             # nodes are regularly distributed between edge 2 and edge4
             pos = x2 * (coef1[i]) + x4 * (1 - coef1[i])
 
-        new_crd += list(pos[1:-1])
+        new_crd.append(pos[1:-1])
         # new_crd += list(np.c_[px[1:-1],py[1:-1]])
-        grid[i, 1:-1] = np.arange(N, len(new_crd), 1)
-        N = len(new_crd)
+        grid[i, 1:-1] = np.arange(N, N + len(pos[1:-1]), 1)
+        N = N + len(pos[1:-1])
 
     nx = grid.shape[0]
     ny = grid.shape[1]
 
     if elm_type == "quad4":
-        elm += [
-            [grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]]
-            for j in range(ny - 1)
-            for i in range(nx - 1)
-        ]
+        j, i = np.meshgrid(np.arange(ny - 1), np.arange(nx - 1), indexing="ij")
+        new_elm = np.stack(
+            [grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]], axis=-1
+        )
     elif elm_type == "quad9":
-        elm += [
+        j, i = np.meshgrid(
+            np.arange(0, ny - 2, 2), np.arange(0, nx - 2, 2), indexing="ij"
+        )
+        new_elm = np.stack(
             [
                 grid[i, j],
                 grid[i + 2, j],
@@ -143,46 +145,56 @@ def structured_mesh_2D(
                 grid[i + 1, j + 2],
                 grid[i, j + 1],
                 grid[i + 1, j + 1],
-            ]
-            for j in range(0, ny - 2, 2)
-            for i in range(0, nx - 2, 2)
-        ]
+            ],
+            axis=-1,
+        )
     elif elm_type == "tri3":
-        for j in range(ny - 1):
-            elm += [[grid[i, j], grid[i + 1, j], grid[i, j + 1]] for i in range(nx - 1)]
-            elm += [
-                [grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]]
-                for i in range(nx - 1)
-            ]
+        # for each j: the nx - 1 first triangles, then the nx - 1 others
+        j, i = np.meshgrid(np.arange(ny - 1), np.arange(nx - 1), indexing="ij")
+        new_elm = np.stack(
+            [
+                np.stack([grid[i, j], grid[i + 1, j], grid[i, j + 1]], axis=-1),
+                np.stack([grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]], axis=-1),
+            ],
+            axis=1,
+        )
     elif elm_type == "tri6":
-        for j in range(0, ny - 2, 2):
-            elm += [
-                [
-                    grid[i, j],
-                    grid[i + 2, j],
-                    grid[i, j + 2],
-                    grid[i + 1, j],
-                    grid[i + 1, j + 1],
-                    grid[i, j + 1],
-                ]
-                for i in range(0, nx - 2, 2)
-            ]
-            elm += [
-                [
-                    grid[i + 2, j],
-                    grid[i + 2, j + 2],
-                    grid[i, j + 2],
-                    grid[i + 2, j + 1],
-                    grid[i + 1, j + 2],
-                    grid[i + 1, j + 1],
-                ]
-                for i in range(0, nx - 2, 2)
-            ]
+        j, i = np.meshgrid(
+            np.arange(0, ny - 2, 2), np.arange(0, nx - 2, 2), indexing="ij"
+        )
+        new_elm = np.stack(
+            [
+                np.stack(
+                    [
+                        grid[i, j],
+                        grid[i + 2, j],
+                        grid[i, j + 2],
+                        grid[i + 1, j],
+                        grid[i + 1, j + 1],
+                        grid[i, j + 1],
+                    ],
+                    axis=-1,
+                ),
+                np.stack(
+                    [
+                        grid[i + 2, j],
+                        grid[i + 2, j + 2],
+                        grid[i, j + 2],
+                        grid[i + 2, j + 1],
+                        grid[i + 1, j + 2],
+                        grid[i + 1, j + 1],
+                    ],
+                    axis=-1,
+                ),
+            ],
+            axis=1,
+        )
     else:
         raise NameError("'{}' elements are not implemented".format(elm_type))
+    new_elm = new_elm.reshape(-1, new_elm.shape[-1])
 
-    elm = np.array(elm, dtype=int)
-    return Mesh(np.array(new_crd), elm, elm_type, ndim=ndim, name=name)
+    elm = np.concatenate(elm + [new_elm.astype(int)]).astype(int, copy=False)
+    return Mesh(np.concatenate(new_crd), elm, elm_type, ndim=ndim, name=name)
 
 
 def generate_nodes(mesh, N, data, type_gen="straight"):

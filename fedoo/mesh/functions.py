@@ -14,6 +14,55 @@ from fedoo.lib_elements.element_list import (
 )
 
 
+def _unique_rows(rows):
+    """Return the first index and the count of each distinct row.
+
+    Same result as ``np.unique(rows, axis=0, return_index=True,
+    return_counts=True)[1:]``, the distinct rows in lexicographic order. For
+    non negative integers the rows are sorted through integer keys (columns
+    packed by pairs, stable sort) instead of structured values.
+
+    Parameters
+    ----------
+    rows : array_like, shape (n_rows, n_cols)
+        Rows to compare.
+
+    Returns
+    -------
+    first_index : numpy.ndarray of int
+        Index of the first occurrence of each distinct row.
+    counts : numpy.ndarray of int
+        Number of occurrences of each distinct row.
+    """
+    rows = np.asarray(rows)
+    n_rows, n_cols = rows.shape
+    if (
+        rows.dtype.kind not in "iu"
+        or n_rows == 0
+        or n_cols == 0
+        or rows.min() < 0
+        or rows.max() >= 2**31
+    ):
+        return np.unique(rows, axis=0, return_index=True, return_counts=True)[1:]
+    base = np.int64(rows.max()) + 1
+    rows64 = rows.astype(np.int64)
+    keys = [
+        rows64[:, c] * base + rows64[:, c + 1] if c + 1 < n_cols else rows64[:, c]
+        for c in range(0, n_cols, 2)
+    ]
+    if len(keys) == 1:
+        order = np.argsort(keys[0], kind="stable")
+    else:
+        order = np.lexsort(keys[::-1])
+    sorted_rows = rows[order]
+    first = np.empty(n_rows, dtype=bool)
+    first[0] = True
+    np.any(sorted_rows[1:] != sorted_rows[:-1], axis=1, out=first[1:])
+    starts = np.flatnonzero(first)
+    counts = np.diff(np.append(starts, n_rows))
+    return order[starts], counts
+
+
 def extract_surface(
     mesh: Mesh,
     reduce_order: bool = False,
@@ -144,9 +193,7 @@ def extract_surface(
 
     test = np.sort(list_faces[:, :n_face_nodes_for_sort], axis=1)
 
-    dump, list_faces_index, counts = np.unique(
-        test, axis=0, return_index=True, return_counts=True
-    )
+    list_faces_index, counts = _unique_rows(test)
     if only_external_faces:
         list_faces_index = list_faces_index[counts == 1]
     surf_elements = list_faces[list_faces_index]
@@ -171,10 +218,21 @@ def extract_surface(
     # idea: compute the distance of a point that belong the elm but
     #       is not the face itself
     if check_normals and only_external_faces:
-        nodes_inside = [
-            np.setdiff1d(mesh.elements[ind_element[i]], face)[0]
-            for i, face in enumerate(surf_elements)
-        ]
+        # for each face, the smallest node of its element not in the face
+        # (np.setdiff1d(element, face)[0])
+        elm_nodes = mesh.elements[ind_element]
+        in_face = (elm_nodes[:, :, np.newaxis] == surf_elements[:, np.newaxis, :]).any(
+            axis=2
+        )
+        if elm_nodes.dtype.kind not in "iu" or np.any(in_face.all(axis=1)):
+            nodes_inside = [
+                np.setdiff1d(mesh.elements[ind_element[i]], face)[0]
+                for i, face in enumerate(surf_elements)
+            ]
+        else:
+            nodes_inside = np.where(
+                in_face, np.iinfo(elm_nodes.dtype).max, elm_nodes
+            ).min(axis=1)
 
         if dim == 1:
             # to check the normal use lin2 interpolation even for lin3 element
@@ -807,7 +865,7 @@ def extract_edges(
 
     test = np.sort(list_edges[:, :n_edge_nodes_for_sort], axis=1)
 
-    dump, list_edges_index = np.unique(test, axis=0, return_index=True)
+    list_edges_index = _unique_rows(test)[0]
 
     edge_elements = list_edges[list_edges_index]
     ind_element = list_edges_index // n_edges_in_elm
