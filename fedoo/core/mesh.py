@@ -1642,13 +1642,7 @@ class Mesh(MeshBase):
                     "method='spr'."
                 )
             try:
-                # symmetric positive definite mass matrix: symmetric ordering
-                # and pivoting give much less fill-in than factorized's COLAMD
-                solve = linalg.splu(
-                    mass.tocsc(),
-                    permc_spec="MMD_AT_PLUS_A",
-                    options={"SymmetricMode": True},
-                ).solve
+                solve = linalg.factorized(mass.tocsc())
             except RuntimeError as exc:
                 raise ValueError(
                     "L2 GaussPoint to Node conversion failed because the "
@@ -1684,8 +1678,9 @@ class Mesh(MeshBase):
         rhs_data = rhs @ data
         if rhs_data.ndim == 1:
             return solve(rhs_data)
-        # all the components in one solve (several right-hand sides)
-        return np.ascontiguousarray(solve(rhs_data))
+        return np.column_stack(
+            [solve(rhs_data[:, i]) for i in range(rhs_data.shape[1])]
+        )
 
     def _gausspoint_to_node_spr(
         self,

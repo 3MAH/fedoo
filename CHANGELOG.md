@@ -299,9 +299,6 @@ semantic versioning.
   are removed only when they are more than a tenth of the entries (frames
   along the axes). Without numba, and when a local degree of freedom is
   related to several nodes, the sparse products are used as before.
-- **Gauss point to node conversion with `method="l2"`**: the mass matrix is
-  factorized with a symmetric ordering (much less fill-in) and all the
-  components are solved together. Same values to rounding.
 
 
 ### Fixed
