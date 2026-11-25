@@ -645,65 +645,8 @@ class NonLinear(Problem):
                 self.nr_errors = {field: 0.0 for field in self.nr_parameters["fields"]}
             return 0
         if self.nr_parameters["criterion"] == "Fields":
-            residual = self._get_free_dof_residual()
-            # Reference flux: reactions on the constrained DOFs and applied
-            # loads on the free ones. The balance returned by get_ext_forces
-            # holds the residual itself on unloaded free DOFs, which would
-            # make a relative tolerance unreachable.
-            force = np.array(self.get_ext_forces(include_mpc=False), dtype=float)
-            applied = self.get_B()
-            force[dof_free] = 0 if np.isscalar(applied) else applied[dof_free]
-            covered = np.zeros(len(dof_free), dtype=bool)
-            labels = (
-                np.full(self.n_dof, -1, dtype=np.int32)
-                if self._MFext is not None
-                else None
-            )
-            errors = {}
-            for label, (field, parameters) in enumerate(
-                self.nr_parameters["fields"].items()
-            ):
-                mask = self._new_vect_dof()
-                self._set_vect_component(mask, field, 1)
-                mask = mask.astype(bool)
-                selected = mask[dof_free]
-                if np.any(covered & selected):
-                    raise ValueError(
-                        "Convergence fields must not overlap on free DOFs."
-                    )
-                covered |= selected
-                if labels is not None:
-                    labels[mask] = label
-                scale = parameters.get("reference")
-                if scale is None:
-                    scale = np.linalg.norm(force[mask], norm_type)
-                threshold = (
-                    parameters.get("atol", 0) + parameters.get("rtol", 0) * scale
-                )
-                value = (
-                    np.linalg.norm(residual[selected], norm_type)
-                    if np.any(selected)
-                    else 0.0
-                )
-                if threshold == 0 and value != 0:
-                    raise ValueError(
-                        f"Field '{field}' has a zero reference (no reaction nor "
-                        "nodal load) to scale its relative tolerance: give it "
-                        "an atol or a reference."
-                    )
-                errors[field] = value / threshold if threshold else 0.0
-            if not np.all(covered):
-                raise ValueError(
-                    "Convergence fields must cover every free DOF, including global DOFs."
-                )
-            if labels is not None:
-                mapping = self._MatCB.tocoo()
-                if np.any(labels[mapping.row] != labels[dof_free[mapping.col]]):
-                    raise ValueError(
-                        "Fields convergence does not support MPCs mixing different fields."
-                    )
-            self.nr_errors = errors
-            return float(np.max(list(errors.values())))
+            self.nr_errors = self._field_errors(self.nr_parameters["fields"])
+            return float(np.max(list(self.nr_errors.values())))
         if self.nr_parameters["criterion"] == "Displacement":
             if self._err0 is None:  # assess err0 from current state
                 # Normalize by the current increment (not the total
@@ -725,6 +668,10 @@ class NonLinear(Problem):
             )
         elif self.nr_parameters["criterion"] == "Force":
             if self._err0 is None:
+                errors = self._force_errors_by_field()
+                if errors is not None:
+                    self.nr_errors = errors
+                    return float(np.max(list(errors.values())))
                 # Reevaluate the current force scale at each Newton iteration.
                 err0 = np.linalg.norm(
                     self.get_ext_forces(include_mpc=False),
@@ -769,6 +716,92 @@ class NonLinear(Problem):
         """
         self._force_elastic_next_iter = True
 
+    def _field_errors(self, fields, unit_reference=False):
+        """Residual norm of each field divided by its own threshold.
+
+        With ``unit_reference``, a field without reaction nor nodal load takes
+        a unit reference, as the Force criterion does, and a residual at the
+        round-off level of the assembled fluxes counts as converged.
+        """
+        norm_type = self.nr_parameters["norm_type"]
+        dof_free = self._dof_free
+        residual = self._get_free_dof_residual()
+        # reference flux: reactions on constrained DOFs, applied loads on free
+        # ones (get_ext_forces holds the residual itself on unloaded free DOFs)
+        force = np.array(self.get_ext_forces(include_mpc=False), dtype=float)
+        applied = self.get_B()
+        force[dof_free] = 0 if np.isscalar(applied) else applied[dof_free]
+        roundoff = self._flux_roundoff() if unit_reference else None
+        covered = np.zeros(len(dof_free), dtype=bool)
+        labels = (
+            np.full(self.n_dof, -1, dtype=np.int32) if self._MFext is not None else None
+        )
+        errors = {}
+        for label, (field, parameters) in enumerate(fields.items()):
+            mask = self._new_vect_dof()
+            self._set_vect_component(mask, field, 1)
+            mask = mask.astype(bool)
+            selected = mask[dof_free]
+            if np.any(covered & selected):
+                raise ValueError("Convergence fields must not overlap on free DOFs.")
+            covered |= selected
+            if labels is not None:
+                labels[mask] = label
+            scale = parameters.get("reference")
+            if scale is None:
+                scale = np.linalg.norm(force[mask], norm_type)
+                if scale == 0 and unit_reference:
+                    scale = 1.0
+            threshold = parameters.get("atol", 0) + parameters.get("rtol", 0) * scale
+            if roundoff is not None:
+                # self-equilibrated field: reactions and residual are both noise
+                threshold += np.linalg.norm(roundoff[mask], norm_type)
+            value = (
+                np.linalg.norm(residual[selected], norm_type)
+                if np.any(selected)
+                else 0.0
+            )
+            if threshold == 0 and value != 0:
+                raise ValueError(
+                    f"Field '{field}' has a zero reference (no reaction nor "
+                    "nodal load) to scale its relative tolerance: give it "
+                    "an atol or a reference."
+                )
+            errors[field] = value / threshold if threshold else 0.0
+        if not np.all(covered):
+            raise ValueError(
+                "Convergence fields must cover every free DOF, including global DOFs."
+            )
+        if labels is not None:
+            mapping = self._MatCB.tocoo()
+            if np.any(labels[mapping.row] != labels[dof_free[mapping.col]]):
+                raise ValueError(
+                    "Fields convergence does not support MPCs mixing different fields."
+                )
+        return errors
+
+    def _flux_roundoff(self):
+        """Round-off level of the assembled fluxes, from ``|A| |x|``."""
+        matrix, dof = self.get_A(), self.get_dof_solution()
+        if np.isscalar(matrix) or np.isscalar(dof):
+            return self._new_vect_dof()
+        return 1e-10 * (abs(matrix) @ np.abs(dof))
+
+    def _force_errors_by_field(self):
+        """Force errors of the displacement and temperature fields, or None.
+
+        A single norm over forces and heat flows lets the larger unit hide the
+        other residual: each field is compared to its own reference.
+        """
+        variables = self.space.list_variables()
+        if "Temp" not in variables or "DispX" not in variables:
+            return None
+        fields = {"Disp": {"rtol": 1.0}, "Temp": {"rtol": 1.0}}
+        try:
+            return self._field_errors(fields, unit_reference=True)
+        except ValueError:  # other free dofs, or MPC mixing the fields
+            return None
+
     def set_nr_criterion(self, criterion="Force", **kargs):
         """Define the convergence criterion of the newton raphson algorithm.
 
@@ -799,6 +832,10 @@ class NonLinear(Problem):
               The reference error.
               If None (default), err0 is automatically computed. For Force,
               the current total force norm is recomputed at each iteration.
+              When the problem has displacement and temperature unknowns, the
+              Force error is the largest of the two fields, each divided by
+              its own norm (forces and heat flows have different units); the
+              two errors are stored in pb.nr_errors.
               A zero norm uses one for that evaluation only,
               making tol an absolute residual tolerance in force units.
             * 'tol': float, default is 5e-3.

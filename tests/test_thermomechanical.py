@@ -115,7 +115,10 @@ def test_adiabatic_thermoelastic_heating_and_rollback():
     pb.nlsolve(dt=0.05, tmax=0.1, update_dt=False, print_info=0)
     C = material.get_tangent_matrix(assembly)
     beta = C @ np.array([material.alpha] * 3 + [0.0] * 3)
-    expected = 300 - 300 * beta[0] * 0.01 / (material.density * material.specific_heat)
+    # Two backward Euler steps at the current temperature:
+    # rho c (T - T_start) = -T beta:(eps - eps_start).
+    capacity = material.density * material.specific_heat
+    expected = 300 / (1 + beta[0] * 0.005 / capacity) ** 2
     np.testing.assert_allclose(pb.get_temp(), expected, atol=1e-10)
     saved = pb.get_temp().copy()
     pb._dU = np.ones(pb.n_dof) * 0.1
@@ -608,3 +611,100 @@ def test_coupled_material_has_a_single_density():
     with pytest.raises(ValueError, match="density"):
         simcoon_material.set_density(5)
     assert simcoon_material.set_density(3).density == 3
+
+
+@pytest.mark.parametrize("simcoon", [False, True])
+def test_reference_temperature_stresses_a_clamped_body(simcoon):
+    """Initial field at 350 K, stress-free at 293.15 K: sigma = -beta (T - T_ref)."""
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+    if simcoon:
+        material = fd.constitutivelaw.SimcoonThermoMechanical(
+            "ELISO", [1, 2, 100, 0.2, 0.001], 1, reference_temperature=293.15
+        )
+    else:
+        material = fd.constitutivelaw.ElasticIsotrop(
+            100,
+            0.2,
+            thermal=fd.constitutivelaw.ThermalProperties(
+                1, 2, 1, alpha=0.001, reference_temperature=293.15
+            ),
+        )
+    assembly = fd.Assembly.create(
+        fd.weakform.StressEquilibrium(material) + fd.weakform.HeatEquation(material),
+        mesh,
+    )
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_solver("direct_scipy")
+    pb.set_dof("Temp", 350)
+    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+    _field_criterion(pb)
+    nodes = np.arange(mesh.n_nodes)
+    pb.bc.add("Dirichlet", nodes, "Disp", 0)
+    pb.bc.add("Dirichlet", nodes, "Temp", 350, start_value=350)
+    pb.nlsolve(dt=0.1, tmax=0.1, print_info=0)
+    beta = 100 * 0.001 / (1 - 2 * 0.2)
+    stress = np.asarray(assembly.sv["Stress"].asarray())
+    np.testing.assert_allclose(stress[:3], -beta * (350 - 293.15), rtol=1e-10)
+    np.testing.assert_allclose(stress[3:], 0, atol=1e-10)
+
+
+def test_simcoon_rate_dependent_law_is_integrated_once_per_increment():
+    sim = pytest.importorskip("simcoon")
+    props = [1, 2, 100, 0.2, 0.001, 50, 0.2, 40.0, 20.0]
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+    material = fd.constitutivelaw.SimcoonThermoMechanical(
+        "ZENER", props, 1.0, n_statev=8
+    )
+    assembly = fd.Assembly.create(
+        fd.weakform.StressEquilibrium(material) + fd.weakform.HeatEquation(material),
+        mesh,
+    )
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_solver("direct_scipy")
+    pb.set_dof("Temp", 300)
+    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+    nodes = np.arange(mesh.n_nodes)
+    pb.bc.add("Dirichlet", nodes, "DispX", 0.01 * mesh.nodes[:, 0])
+    pb.bc.add("Dirichlet", nodes, ["DispY", "DispZ"], 0)
+    pb.bc.add("Dirichlet", nodes, "Temp", 300, start_value=300)
+    dt, n_step = 0.5, 4
+    pb.nlsolve(dt=dt, tmax=dt * n_step, update_dt=False, print_info=0)
+
+    # same strain history on one material point
+    strain, stress = np.zeros((6, 1), order="F"), np.zeros((6, 1), order="F")
+    statev, wm, wt = (np.zeros((n, 1), order="F") for n in (8, 4, 3))
+    rotation = np.eye(3)[:, :, None].copy(order="F")
+    props = np.asfortranarray(np.array(props, dtype=float)[:, None])
+    temperature, increment = np.full(1, 300.0), np.zeros((6, 1), order="F")
+
+    def step(increment, time, dtime, start):
+        out = sim.umat_T(
+            "ZENER", strain, increment, stress, rotation, props, statev, time,
+            dtime, wm, wt, temperature, np.zeros(1), ndi=3, n_threads=1, start=start,
+        )  # fmt: skip
+        return [np.asfortranarray(value) for value in out[:4]]
+
+    stress, statev, wm, wt = step(increment, 0.0, 0.0, True)
+    increment[0] = 0.01 / n_step
+    for i in range(n_step):
+        stress, statev, wm, wt = step(increment, i * dt, dt, False)
+        strain = np.asfortranarray(strain + increment)
+    result = assembly.sv["Stress"].asarray()
+    np.testing.assert_allclose(result, np.tile(stress, result.shape[1]), atol=1e-10)
+
+
+def test_small_strain_coupling_requires_an_absolute_initial_temperature():
+    fd.ModelingSpace("3D")
+    mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+    thermal = fd.constitutivelaw.ThermalProperties(1.0, 2, 1, alpha=1e-3)
+    material = fd.constitutivelaw.ElasticIsotrop(100, 0.2, thermal=thermal)
+    assembly = fd.Assembly.create(
+        fd.weakform.StressEquilibrium(material) + fd.weakform.HeatEquation(material),
+        mesh,
+    )
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
+    with pytest.raises(ValueError, match="absolute temperatures"):
+        pb.initialize()

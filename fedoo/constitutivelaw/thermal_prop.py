@@ -13,8 +13,8 @@ class ThermalProperties(ConstitutiveLaw):
     global axes. ``specific_heat`` is the capacity per mass at fixed strain;
     ``density`` is the reference density in finite strain.
 
-    Small-strain feedback is linearized at ``reference_temperature``; finite
-    strain uses the actual absolute temperature and the logarithmic strain.
+    The thermoelastic feedback uses the actual absolute temperature, with the
+    small strain or, in finite strain, the logarithmic strain.
     With ``coupling=True`` the temperature field and ``reference_temperature``
     are necessarily absolute temperatures in kelvin (never degrees Celsius):
     the thermoelastic heat source is proportional to the absolute temperature.

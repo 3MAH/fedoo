@@ -267,22 +267,127 @@ def test_heat_only_problem_uses_prescribed_deformation_and_reference_capacity(nl
         np.testing.assert_allclose(transformed, reference, atol=1e-9, rtol=1e-9)
 
 
-def test_simcoon_umat_t_still_rejects_finite_strain():
+SIMCOON_LAWS = {
+    # rho, c_p, E, nu, alpha (, sigmaY, k, m) and the number of state variables
+    "ELISO": ([1, 2, 100, 0.2, 0.001], 1),
+    "EPICP": ([1, 2, 100, 0.2, 0.001, 2.0, 30.0, 0.5], 8),
+}
+
+
+def _simcoon_model(formulation, umat="ELISO", reference_temperature=None):
     fd.ModelingSpace("3D")
     mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
+    props, n_statev = SIMCOON_LAWS[umat]
     material = fd.constitutivelaw.SimcoonThermoMechanical(
-        "ELISO", [1, 2, 100, 0.2, 0.001], 1
+        umat,
+        props,
+        [[1.2, 0.15, 0], [0.15, 0.8, 0], [0, 0, 0.6]],
+        n_statev=n_statev,
+        reference_temperature=reference_temperature,
     )
     assembly = fd.Assembly.create(
-        fd.weakform.StressEquilibrium(material, nlgeom="TL")
+        fd.weakform.StressEquilibrium(material, nlgeom=formulation)
         + fd.weakform.HeatEquation(material, nlgeom="TL"),
         mesh,
     )
     pb = fd.problem.NonLinear(assembly)
+    pb.set_solver("direct_scipy")
     pb.set_dof("Temp", 300)
     pb.set_time_integrator(fd.time.FIRST_ORDER, fd.time.BackwardEuler())
-    with pytest.raises(NotImplementedError, match="Simcoon.*small strain"):
+    return pb, assembly, material
+
+
+@pytest.mark.parametrize("formulation", ["TL", "UL"])
+@pytest.mark.parametrize("umat", ["ELISO", "EPICP"])
+def test_simcoon_finite_strain_blocks_match_residual_derivatives(formulation, umat):
+    pb, assembly, _ = _simcoon_model(formulation, umat)
+    pb.initialize()
+    pb.dtime = 0.2
+    pb.set_start()
+    trial = _trial(pb)
+    pb._dU = trial.copy()
+    pb.update()
+    if umat == "EPICP":  # the trial state is plastic
+        assert np.max(assembly.sv["Statev"][1]) > 1e-3
+    tangent = assembly.current.get_global_matrix().copy()
+    rank = assembly.space.variable_rank("Temp")
+    thermal = np.arange(rank * pb.mesh.n_nodes, (rank + 1) * pb.mesh.n_nodes)
+    mechanical = np.setdiff1d(np.arange(pb.n_dof), thermal)
+    rng = np.random.default_rng(13)
+    for indices in (mechanical, thermal):
+        direction = np.zeros(pb.n_dof)
+        direction[indices] = rng.normal(size=len(indices))
+        h = 1e-6
+        pb._dU = trial + h * direction
+        pb.update(compute="vector")
+        plus = -pb.get_D().copy()
+        pb._dU = trial - h * direction
+        pb.update(compute="vector")
+        minus = -pb.get_D().copy()
+        actual, expected = (plus - minus) / (2 * h), tangent @ direction
+        for block in (mechanical, thermal):
+            np.testing.assert_allclose(
+                actual[block], expected[block], rtol=2e-6, atol=2e-6
+            )
+
+
+@pytest.mark.parametrize("umat", ["ELISO", "EPICP"])
+def test_simcoon_tl_and_ul_produce_the_same_coupled_system(umat):
+    systems = []
+    for formulation in ("TL", "UL"):
+        pb, assembly, _ = _simcoon_model(formulation, umat)
         pb.initialize()
+        pb.dtime = 0.2
+        pb.set_start()
+        pb._dU = _trial(pb)
+        pb.update()
+        systems.append(
+            (assembly.current.get_global_matrix().toarray(), pb.get_D().copy())
+        )
+    for tl, ul in zip(*systems):
+        np.testing.assert_allclose(tl, ul, atol=1e-9, rtol=1e-9)
+
+
+@pytest.mark.parametrize("formulation", ["TL", "UL"])
+@pytest.mark.parametrize("reference_temperature", [None, 280.0])
+def test_simcoon_eliso_stress_is_the_native_hencky_stress(
+    formulation, reference_temperature
+):
+    """Same energy as the native law: C:(ln U - alpha (T - T_ref))."""
+    stresses = []
+    for simcoon in (True, False):
+        if simcoon:
+            pb, assembly, _ = _simcoon_model(
+                formulation, "ELISO", reference_temperature
+            )
+        else:
+            pb, assembly, material = _model(formulation, coupling=False)
+            material.thermal.alpha = 0.001
+            material.thermal.reference_temperature = (
+                300 if reference_temperature is None else reference_temperature
+            )
+        pb.initialize()
+        pb.dtime = 0.2
+        pb.set_start()
+        pb._dU = _trial(pb)
+        pb.update()
+        stresses.append(np.asarray(assembly.sv["Stress"].asarray()).copy())
+    np.testing.assert_allclose(stresses[0], stresses[1], rtol=1e-9, atol=1e-9)
+
+
+@pytest.mark.parametrize("formulation", ["TL", "UL"])
+@pytest.mark.parametrize("umat", ["ELISO", "EPICP"])
+def test_simcoon_large_stress_free_thermal_expansion(formulation, umat):
+    pb, assembly, material = _simcoon_model(formulation, umat)
+    material.props[4, 0] = 0.01  # logarithmic expansion coefficient
+    for axis in "XYZ":
+        pb.bc.add("Dirichlet", pb.mesh.find_nodes(axis, 0), "Disp" + axis, 0)
+    pb.bc.add("Dirichlet", np.arange(pb.mesh.n_nodes), "Temp", 320, start_value=300)
+    _criterion(pb)
+    pb.nlsolve(dt=0.1, tmax=0.2, update_dt=False, print_info=0)
+    expected = np.expm1(0.01 * 20) * pb.mesh.nodes.T
+    np.testing.assert_allclose(pb.get_disp(), expected, atol=1e-9)
+    np.testing.assert_allclose(assembly.sv["Stress"].asarray(), 0, atol=1e-8)
 
 
 def test_zero_initial_temperature_is_a_model_error_in_finite_strain():
@@ -318,3 +423,40 @@ def test_uncoupled_heat_equation_keeps_its_form_next_to_finite_strain(formulatio
     leaves = list(assembly.iter_leaf())
     assert all("ReferenceHeatFlux" not in leaf.sv for leaf in leaves)
     np.testing.assert_allclose(pb.get_temp(), 300)
+
+
+def test_default_force_criterion_checks_each_field():
+    """A heat flow much larger than the forces must not hide the mechanics."""
+    pb, assembly, _ = _model("UL")
+    mesh = pb.mesh
+    left, right = (
+        mesh.find_nodes("X", mesh.bounding_box.xmin),
+        mesh.find_nodes("X", mesh.bounding_box.xmax),
+    )
+    pb.bc.add("Dirichlet", left, "Disp", 0)
+    pb.bc.add("Dirichlet", left, "Temp", 300)
+    pb.bc.add("Neumann", right, "DispX", 1e-3)
+    pb.bc.add("Neumann", right, "Temp", 1e4)
+    assert pb.nr_parameters["criterion"] == "Force"
+    pb.nlsolve(dt=0.5, tmax=1, update_dt=False, print_info=0)
+    assert set(pb.nr_errors) == {"Disp", "Temp"}
+    tol = pb.nr_parameters["tol"]
+    assert max(pb.nr_errors.values()) < tol
+    # the single norm over both fields is far below the mechanical error
+    residual = pb._get_free_dof_residual()
+    force = np.linalg.norm(pb.get_ext_forces(include_mpc=False))
+    assert np.linalg.norm(residual) / force < pb.nr_errors["Disp"]
+
+
+@pytest.mark.parametrize("formulation", ["TL", "UL"])
+def test_default_force_criterion_converges_on_a_self_equilibrated_field(formulation):
+    # free expansion: displacement reactions and residual are both round-off
+    pb, assembly, material = _model(formulation, "isotropic")
+    material.thermal.alpha = np.array([0.008, 0.010, 0.012])
+    material.thermal.coupling = False
+    for axis in "XYZ":
+        pb.bc.add("Dirichlet", pb.mesh.find_nodes(axis, 0), "Disp" + axis, 0)
+    pb.bc.add("Dirichlet", np.arange(pb.mesh.n_nodes), "Temp", 320, start_value=300)
+    pb.nlsolve(dt=0.1, tmax=0.2, update_dt=False, print_info=0)
+    expected = np.expm1(material.thermal.alpha * 20)[:, None] * pb.mesh.nodes.T
+    np.testing.assert_allclose(pb.get_disp(), expected, atol=1e-6)

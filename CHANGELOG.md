@@ -17,7 +17,9 @@ semantic versioning.
   tolerances and optional reference scales per field, including MPC reduction.
 - The default Force criterion checks the displacement and temperature fields
   separately on a coupled problem (largest relative error of the two), since a
-  single norm over forces and heat flows lets one field hide the other.
+  single norm over forces and heat flows lets one field hide the other. A field
+  whose reactions vanish (free thermal expansion) converges once its residual
+  reaches the round-off level of the assembled fluxes.
 - A monolithic thermal expansion example with analytic and Simcoon variants,
   and documentation of supported modes and remaining finite-strain work.
 - Finite-strain native thermoelasticity in 3D and plane strain, using the
@@ -29,7 +31,9 @@ semantic versioning.
   TL heat equation) under Simcoon's total form, and accepts every ``umat_T``
   law instead of ELISO, EPICP and EPKCP only. ``reference_temperature`` now
   reaches Simcoon (it was ignored: the initial temperature was always the
-  stress-free one); omitted, the initial temperature is kept. Requires
+  stress-free one); omitted, the initial temperature is kept. The evaluations
+  made when a step is committed or rolled back no longer advance the state of
+  the law, which a rate-dependent law would integrate twice. Requires
   Simcoon >= 2.6.
 
 ### Changed

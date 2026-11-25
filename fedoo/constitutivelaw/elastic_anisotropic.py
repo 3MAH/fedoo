@@ -220,7 +220,7 @@ class ElasticAnisotropic(Mechanical3D):
             elastic_strain = total_strain - expansion[:, None] * (
                 temperature - self.reference_temperature
             )
-            self._update_thermal_response(assembly, pb, total_strain, beta)
+            self._update_thermal_response(assembly, pb, total_strain, temperature, beta)
         else:
             elastic_strain = total_strain
 
@@ -326,25 +326,32 @@ class ElasticAnisotropic(Mechanical3D):
         assembly.sv["HeatSourceTemperatureTangent"] = source_temperature
         assembly.sv["HeatSourceDeformationTangent"] = source_deformation
 
-    def _update_thermal_response(self, assembly, pb, strain, beta):
+    def _update_thermal_response(self, assembly, pb, strain, temperature, beta):
         assembly.sv["StressTemperatureTangent"] = -beta
         source = np.broadcast_to(
             np.asarray(self.thermal.heat_source, dtype=float),
             (assembly.n_gauss_points,),
         ).copy()
         derivative = np.zeros_like(beta)
+        source_temperature = 0.0
         if (
             self.thermal.coupling
             and pb.dtime > 0
             and FIRST_ORDER in pb.time_integrators
         ):
-            derivative = -self.reference_temperature * beta / pb.dtime
-            source += np.sum(
-                derivative * (strain - assembly.sv["_TM_StrainStart"]), axis=0
+            # r = -T beta:(eps - eps_start)/dt at the current temperature,
+            # as in the finite strain form
+            check_absolute_temperature(temperature)
+            rate = (
+                np.sum(beta * (strain - assembly.sv["_TM_StrainStart"]), axis=0)
+                / pb.dtime
             )
+            source -= temperature * rate
+            derivative = -temperature * beta / pb.dtime
+            source_temperature = -rate
         assembly.sv["HeatSource"] = source
         assembly.sv["HeatSourceStrainTangent"] = derivative
-        assembly.sv["HeatSourceTemperatureTangent"] = 0.0
+        assembly.sv["HeatSourceTemperatureTangent"] = source_temperature
 
     def get_stress_from_strain(self, assembly, strain_tensor):
         finite = self.is_thermomechanical and "_TM_LogStrain" in assembly.sv
