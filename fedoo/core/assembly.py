@@ -1488,6 +1488,7 @@ class Assembly(AssemblyBase):
                 new_mesh._saved_gausspoint2node_l2 = {}
                 new_assembly = copy(self)
                 new_assembly.mesh = new_mesh
+                new_assembly._reference_assembly = self
                 self.current = new_assembly
             else:
                 self.current.mesh.nodes = new_crd

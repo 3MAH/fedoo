@@ -265,6 +265,12 @@ semantic versioning.
 
 ### Fixed
 
+- **Inertia with the updated Lagrangian formulation integrates the reference
+  mass.** The mass matrix was integrated on the updated mesh with the
+  reference density, so the mass followed the volume change (`det F`). The
+  density is now weighted by `dV0/dv`, also in `2Daxi` (reference radius). TL
+  and small strain dynamics are unchanged; UL dynamic results with a volume
+  change do change, and now match the total Lagrangian ones.
 - Release Pardiso's native factorization memory when factorization reuse is
   disabled or its context is replaced.
 - Coordinate-only mesh expressions no longer assume element connectivity is
