@@ -2,7 +2,7 @@
 # compatible with the simcoon strain and stress notation
 
 from fedoo.core.base import InvalidKinematicStateError
-from fedoo.core.mechanical3d import MechanicalUMAT
+from fedoo.core.mechanical3d import MechanicalUMAT, _constitutive_corate
 import simcoon as sim
 
 _CORATE_CODES = {
@@ -25,7 +25,9 @@ class Simcoon(MechanicalUMAT):
     Parameters
     ----------
     umat_name: str
-        Name of the constitutive law.
+        Name of the constitutive law: a 5-letter simcoon name, or ``NAME_closed``
+        for the dedicated kernel simcoon keeps next to its modular default
+        (``EPICP_closed``, ``ZENER_closed``...; same props and statev layout).
     props: numpy.array
         The constitive laws properties
     tangent_mode : int, optional
@@ -51,19 +53,27 @@ class Simcoon(MechanicalUMAT):
     name : str
         The name of the constitutive law
     ncp : {"fischer_burmeister", "min"}, default="fischer_burmeister"
-        Complementarity function of the local cutting-plane return mapping,
-        forwarded to :func:`simcoon.umat`. ``"min"`` is the classic
-        cutting-plane step on a single surface with a Fischer-Burmeister
-        fallback. Simcoon only accepts it for the laws that read it and with
-        the cutting-plane integrator, and raises a ``ValueError`` otherwise.
-        The set of laws depends on the simcoon version: ``EPICP``, ``EPKCP``
-        and modular materials without an Armstrong-Frederick back stress in
-        simcoon 2.3; every law served by the modular engine from simcoon 2.4.
-    integrator : {"cutting_plane", "closest_point"}, default="cutting_plane"
+        Complementarity function of the local return mapping, forwarded to
+        :func:`simcoon.umat`. ``"min"`` is the classic step on a single
+        surface with a Fischer-Burmeister fallback. Simcoon only accepts it
+        for the laws that read it and raises a ``ValueError`` otherwise. The
+        set of laws depends on the simcoon version: ``EPICP``, ``EPKCP`` and
+        modular materials without an Armstrong-Frederick back stress, under
+        the cutting plane only, in simcoon 2.3; every law served by the
+        modular engine under both integrators from simcoon 2.4 (the cutting
+        plane still refuses it with an Armstrong-Frederick back stress, the
+        closest point takes it).
+    integrator : {None, "default", "cutting_plane", "closest_point"}, default=None
         Local integrator of the laws with a return mapping, forwarded to
-        :func:`simcoon.umat`. ``"closest_point"`` is a backward-Euler update
-        that requires ``tangent_mode=2``; a law without a closest-point
-        update keeps the cutting plane.
+        :func:`simcoon.umat` when given. ``None`` keeps simcoon's default:
+        the cutting plane up to simcoon 2.4, the law's own from simcoon 2.5
+        (``"default"``: the closest point for the unified SMA laws SMADI,
+        SMADC, SMAAI, SMAAC, SMRDI, SMRDC, SMRAI, SMRAC, the cutting plane for
+        every other law). ``"closest_point"`` is a backward-Euler update
+        with its own operators; simcoon raises a ``ValueError`` at
+        the first call of a law without a closest-point update (every name
+        the modular engine serves has one; a dedicated kernel that keeps its
+        own algorithm, such as ``ZENER_closed``, has none).
 
     ``ncp`` and ``integrator`` are keyword-only and are also attributes that
     can be changed after construction (``tangent_mode`` does not follow a
@@ -102,8 +112,12 @@ class Simcoon(MechanicalUMAT):
       stiffness / hardening parameters with this convention or the
       response will not match the intended material orientation.
 
-    * Hyperelastic laws (those with ``_Lt_from_F = True``) are gated on
-      plane stress; they remain compatible with 2Daxi at
+    * Hyperelastic laws (those with ``_Lt_from_F = True``) run in plane
+      stress (``2Dstress``) or uniaxial stress (``1Dstress``) only when
+      simcoon condenses the state itself, which fedoo asks through
+      ``simcoon.condensation_serves``; otherwise a ``NotImplementedError`` is
+      raised. Unsupported reduced states are refused for strain-driven laws
+      as well. They remain compatible with 2Daxi at
       finite strain provided the F[θθ] = r/R fix is in effect (see
       :func:`fedoo.weakform.stress_equilibrium._comp_grad_disp`).
 
@@ -130,11 +144,22 @@ class Simcoon(MechanicalUMAT):
 
         simcoon answers: its log-strain boxes, the modular material among them,
         and the hyperelastic kernels built on F are served; the rate law and the
-        small-strain-only laws are not. A simcoon without the total formulation
-        (2.1) serves none, and the law keeps the rate update.
+        small-strain-only laws are not.
         """
-        serves = getattr(sim, "total_formulation_serves", None)
-        return serves is not None and serves(self.umat_name)
+        return bool(sim.total_formulation_serves(self.umat_name))
+
+    def _serves_reduced_state(self, ndi, assembly=None):
+        """Whether simcoon condenses the reduced state ``ndi`` for this law.
+
+        The question is asked for the formulation the law is run with on
+        ``assembly``: simcoon validates a condensed state per kinematic form,
+        and a law served in rate form may not be under the total formulation.
+        """
+        total = assembly is not None and _constitutive_corate(assembly) is None
+        if ndi == 3:
+            return True
+        options = {"kinematic_form": "total"} if total else {}
+        return bool(sim.condensation_serves(self.umat_name, ndi, **options))
 
     @property
     def manages_material_frame(self):
@@ -171,7 +196,7 @@ class Simcoon(MechanicalUMAT):
         name="",
         *,
         ncp="fischer_burmeister",
-        integrator="cutting_plane",
+        integrator=None,
     ):
         """Build a Simcoon law from a modular material configuration.
 
@@ -463,7 +488,7 @@ class Simcoon(MechanicalUMAT):
         name="",
         *,
         ncp="fischer_burmeister",
-        integrator="cutting_plane",
+        integrator=None,
     ):
         # props is a nparray containing all the material variables
         # nstatev is a nparray containing all the material variables
@@ -482,17 +507,20 @@ class Simcoon(MechanicalUMAT):
 
         # ndi = nshr = 3 #compute the 3D constitutive law even for 2D law
         self.umat_name = umat_name
-        self.is_isotropic = umat_name in self._ISOTROPIC_UMATS
+        # the props / statev layout of a _closed name (simcoon >= 2.4, the dedicated kernel kept
+        # next to the modular default) is the one of its plain name
+        layout = umat_name[:-7] if umat_name.endswith("_closed") else umat_name
+        self.is_isotropic = layout in self._ISOTROPIC_UMATS
         # MechanicalUMAT retains the historical defaults: cache the elastic
         # tangent and request Simcoon's continuum tangent (mode 1).
 
         # _Lt_from_F attribute is set to True if the tangent matrix is related
         # to F instead of log epsilon, ie for hyper elastic materials
-        if umat_name == "ELISO":
+        if layout == "ELISO":
             self.n_statev = 1
             self.props_label = {"E": 0, "nu": 1, "alpha": 2}
             self.statev_label = {"T": 0}
-        elif umat_name == "ELIST":
+        elif layout == "ELIST":
             self.n_statev = 1
             self.props_label = {
                 "axis": 0,
@@ -505,7 +533,7 @@ class Simcoon(MechanicalUMAT):
                 "alphaT": 7,
             }
             self.statev_label = {"T": 0}
-        elif umat_name == "ELORT":
+        elif layout == "ELORT":
             self.n_statev = 1
             self.props_label = {
                 "Ex": 0,
@@ -522,7 +550,7 @@ class Simcoon(MechanicalUMAT):
                 "alphaz": 11,
             }
             self.statev_label = {"T": 0}
-        elif umat_name == "EPICP":
+        elif layout == "EPICP":
             self.n_statev = 8
             self.props_label = {
                 "E": 0,
@@ -533,7 +561,7 @@ class Simcoon(MechanicalUMAT):
                 "m": 5,
             }  # powerlaw sigma_e = sigmaY + k * eps_p^m
             self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8)}
-        elif umat_name == "EPJCK":
+        elif layout == "EPJCK":
             self.n_statev = 9
             self.props_label = {
                 "E": 0,
@@ -549,7 +577,7 @@ class Simcoon(MechanicalUMAT):
                 "T_melt": 10,
             }  # Johnson-Cook: (A + B p^n)(1 + C ln(pdot/edot0))(1 - T*^m)
             self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8), "PDOT": 8}
-        elif umat_name == "EPKCP":
+        elif layout == "EPKCP":
             self.n_statev = 14
             self.props_label = {
                 "E": 0,
@@ -568,7 +596,7 @@ class Simcoon(MechanicalUMAT):
                 "EP": slice(2, 8),
                 "X": slice(8, 14),
             }  # X=backstress
-        elif umat_name == "EPCHA":
+        elif layout == "EPCHA":
             self.n_statev = 33
             self.props_label = {
                 "E": 0,
@@ -592,7 +620,7 @@ class Simcoon(MechanicalUMAT):
                 "X2": slice(26, 32),
                 "Hp": 33,
             }
-        elif umat_name == "EPHIL":
+        elif layout == "EPHIL":
             self.n_statev = 8
             self.props_label = {
                 "E": 0,
@@ -609,7 +637,7 @@ class Simcoon(MechanicalUMAT):
                 "N_hill": 11,
             }
             self.statev_label = {"T": 0, "P": 1, "EP": slice(2, 8)}
-        elif umat_name == "EPHAC":
+        elif layout == "EPHAC":
             self.n_statev = 33
             self.props_label = {
                 "E": 0,
@@ -640,7 +668,7 @@ class Simcoon(MechanicalUMAT):
                 "X2": slice(26, 32),
                 "Hp": 33,
             }
-        elif umat_name == "EPANI":
+        elif layout == "EPANI":
             self.n_statev = 33
             self.props_label = {
                 "E": 0,
@@ -674,7 +702,7 @@ class Simcoon(MechanicalUMAT):
                 "X2": slice(26, 32),
                 "Hp": 33,
             }
-        elif umat_name == "EPDFA":
+        elif layout == "EPDFA":
             self.n_statev = 33
             self.props_label = {
                 "E": 0,
@@ -702,7 +730,7 @@ class Simcoon(MechanicalUMAT):
                 "X2": slice(26, 32),
                 "Hp": 33,
             }
-        elif umat_name == "EPHIN":
+        elif layout == "EPHIN":
             n_plas = self.props[0, 3]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
@@ -719,7 +747,7 @@ class Simcoon(MechanicalUMAT):
                 "T": 0,
                 "EP": slice(1, 7),
             }  # Pi:i*7+7, EPi:slice(i*7+8,i*7+14)
-        elif umat_name == "SMADI" or umat_name == "SMAUT":
+        elif layout == "SMADI" or layout == "SMAUT":
             self.n_statev = 17
             self.props_label = {
                 "flagT": 0,
@@ -765,7 +793,7 @@ class Simcoon(MechanicalUMAT):
                 "a3": 15,
                 "Y0t": 16,
             }
-        elif umat_name == "SMADC":
+        elif layout == "SMADC":
             self.n_statev = 17
             self.props_label = {
                 "flagT": 0,
@@ -813,7 +841,7 @@ class Simcoon(MechanicalUMAT):
                 "a3": 15,
                 "Y0t": 16,
             }
-        elif umat_name == "SMAAI" or umat_name == "SMANI":
+        elif layout == "SMAAI" or layout == "SMANI":
             self.n_statev = 17
             self.props_label = {
                 "flagT": 0,
@@ -866,7 +894,7 @@ class Simcoon(MechanicalUMAT):
                 "a3": 15,
                 "Y0t": 16,
             }
-        elif umat_name == "SMAAC":
+        elif layout == "SMAAC":
             self.n_statev = 17
             self.props_label = {
                 "flagT": 0,
@@ -921,7 +949,7 @@ class Simcoon(MechanicalUMAT):
                 "a3": 15,
                 "Y0t": 16,
             }
-        elif umat_name == "SMRDI":
+        elif layout == "SMRDI":
             # unified_TR (transformation + reorientation), isotropic elasticity
             self.n_statev = 30
             self.props_label = {
@@ -978,7 +1006,7 @@ class Simcoon(MechanicalUMAT):
                 "areo": slice(18, 24),
                 "EReo": slice(24, 30),
             }
-        elif umat_name == "SMRDC":
+        elif layout == "SMRDC":
             # unified_TR (transformation + reorientation), cubic elasticity
             self.n_statev = 30
             self.props_label = {
@@ -1037,7 +1065,7 @@ class Simcoon(MechanicalUMAT):
                 "areo": slice(18, 24),
                 "EReo": slice(24, 30),
             }
-        elif umat_name == "SMRAI":
+        elif layout == "SMRAI":
             # unified_TR (transformation + reorientation), isotropic elasticity + DFA anisotropic criterion
             self.n_statev = 30
             self.props_label = {
@@ -1101,7 +1129,7 @@ class Simcoon(MechanicalUMAT):
                 "areo": slice(18, 24),
                 "EReo": slice(24, 30),
             }
-        elif umat_name == "SMRAC":
+        elif layout == "SMRAC":
             # unified_TR (transformation + reorientation), cubic elasticity + DFA anisotropic criterion
             self.n_statev = 30
             self.props_label = {
@@ -1167,7 +1195,7 @@ class Simcoon(MechanicalUMAT):
                 "areo": slice(18, 24),
                 "EReo": slice(24, 30),
             }
-        elif umat_name == "LLDM0":
+        elif layout == "LLDM0":
             self.n_statev = 10
             self.props_label = {
                 "axis": 0,
@@ -1186,7 +1214,7 @@ class Simcoon(MechanicalUMAT):
                 "p_ts": 3,
                 "EP": slice(4, 10),
             }
-        elif umat_name == "ZENER":
+        elif layout == "ZENER":
             self.n_statev = 8
             self.props_label = {
                 "E0": 0,
@@ -1198,7 +1226,7 @@ class Simcoon(MechanicalUMAT):
                 "etaS1": 6,
             }
             self.statev_label = {"T": 0, "v": 1, "EV": slice(2, 8)}
-        elif umat_name == "ZENNK":
+        elif layout == "ZENNK":
             n_kelvin = self.props[0, 3]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
@@ -1212,7 +1240,7 @@ class Simcoon(MechanicalUMAT):
                 "T": 0,
                 "EV": slice(1, 7),
             }  # vi: i*7+7, EVi: slice(i*7+8,i*7+14)
-        elif umat_name == "PRONK":
+        elif layout == "PRONK":
             n_prony = self.props[0, 3]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
@@ -1226,21 +1254,21 @@ class Simcoon(MechanicalUMAT):
                 "T": 0,
                 "EV_tilde": slice(1, 7),
             }  # vi: i*7+7, EVi: slice(i*7+8,i*7+14)
-        elif umat_name == "SMAMO":
+        elif layout == "SMAMO":
             nvariants = self.props[0, 7]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
-        elif umat_name == "SMAMC":
+        elif layout == "SMAMC":
             nvariants = self.props[0, 8]
             # should be the same for all gauss_points. If not, needs several
             # assemblies
             self.n_statev = nvariants + 8
             self.props_label = {}
             self.statev_label = {}
-        elif umat_name == "NEOHC":
+        elif layout == "NEOHC":
             self.n_statev = 1
             self.props_label = {
                 "mu": 0,
@@ -1248,7 +1276,7 @@ class Simcoon(MechanicalUMAT):
             }
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
-        elif umat_name == "MOORI":
+        elif layout == "MOORI":
             self.n_statev = 1
             self.props_label = {
                 "C_10": 0,
@@ -1257,7 +1285,7 @@ class Simcoon(MechanicalUMAT):
             }
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
-        elif umat_name == "YEOHH":
+        elif layout == "YEOHH":
             self.n_statev = 1
             self.props_label = {
                 "C_10": 0,
@@ -1267,7 +1295,7 @@ class Simcoon(MechanicalUMAT):
             }
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
-        elif umat_name == "ISHAH":
+        elif layout == "ISHAH":
             self.n_statev = 1
             self.props_label = {
                 "C_10": 0,
@@ -1277,7 +1305,7 @@ class Simcoon(MechanicalUMAT):
             }
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
-        elif umat_name == "GETHH":
+        elif layout == "GETHH":
             self.n_statev = 1
             self.props_label = {
                 "C_1": 0,
@@ -1286,7 +1314,7 @@ class Simcoon(MechanicalUMAT):
             }
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
-        elif umat_name == "SWANH":
+        elif layout == "SWANH":
             self.n_statev = 1
             self.props_label = {
                 "N_Swanson": 0,
@@ -1298,14 +1326,9 @@ class Simcoon(MechanicalUMAT):
             self.statev_label = {"T": 0}
             self._Lt_from_F = True
         else:
-            raise ValueError("Invalid umat_name: Expected a valid 5 char string.")
-
-    def get_tangent_matrix(self, assembly, dimension=None):
-        # Simcoon >= 2.3 already condenses ndi=2 tangents. A second
-        # condensation would divide by the zero out-of-plane stiffness.
-        if assembly.space.get_dimension() == "2Dstress":
-            return assembly.sv["TangentMatrix"]
-        return super().get_tangent_matrix(assembly, dimension)
+            raise ValueError(
+                "Invalid umat_name: expected a 5-letter simcoon name, optionally with the _closed suffix."
+            )
 
     def _umat_options(self, assembly, *, in_material_frame, ndi):
         wf = getattr(assembly, "weakform", None)
@@ -1346,7 +1369,7 @@ class Simcoon(MechanicalUMAT):
                 work_correction=work_correction,
                 tangent_output=tangent_output,
                 ncp=self.ncp,
-                integrator=self.integrator,
+                **({} if self.integrator is None else {"integrator": self.integrator}),
                 **kwargs,
             )
         except sim.StepCut as exc:

@@ -1,5 +1,6 @@
 """Beam constitutive laws."""
 
+import warnings
 from types import SimpleNamespace
 from fedoo.util.beam_recovery import (
     validate_positions,
@@ -10,15 +11,54 @@ from fedoo.mesh import disk_mesh, hollow_disk_mesh, rectangle_mesh
 
 
 from fedoo.core.base import ConstitutiveLaw
+from fedoo.core.mesh import Mesh
 from fedoo.util.beam_tensors import BeamStressList, BeamStrainList
 import numpy as np
+
+
+def _check_quadrature_count(value, name, minimum=1):
+    if not isinstance(value, (int, np.integer)) or value < minimum:
+        raise ValueError(f"{name} must be an integer of at least {minimum}")
+
+
+def _gauss_layers(lower, upper, n_layers):
+    """Two-point Gauss rule on each of the equal layers."""
+    edges = np.linspace(lower, upper, n_layers + 1)
+    half = 0.5 * np.diff(edges)
+    center = 0.5 * (edges[:-1] + edges[1:])
+    offset = half / np.sqrt(3)
+    points = np.column_stack((center - offset, center + offset)).ravel()
+    return points, np.repeat(half, 2)
+
+
+def _polar_rule(r_int, r_ext, n_r, n_theta):
+    """Gauss-Legendre in the radius (weight r dr) times mid-sector angles."""
+    _check_quadrature_count(n_r, "n_r")
+    _check_quadrature_count(n_theta, "n_theta", minimum=3)
+    xi, weights = np.polynomial.legendre.leggauss(n_r)
+    radius = 0.5 * (r_ext + r_int) + 0.5 * (r_ext - r_int) * xi
+    radial_weights = 0.5 * (r_ext - r_int) * weights * radius
+    angle = (np.arange(n_theta) + 0.5) * 2 * np.pi / n_theta
+    rho, theta = np.meshgrid(radius, angle, indexing="ij")
+    w = np.repeat(radial_weights, n_theta) * (2 * np.pi / n_theta)
+    return (rho * np.cos(theta)).ravel(), (rho * np.sin(theta)).ravel(), w
 
 
 class BeamProperties(ConstitutiveLaw):
     section_type = "generic"
     recovery = "linear"
+    # True for sections that compute BeamStress and the section tangent
+    # themselves (nonlinear sections): the assembly then drives their lifecycle.
+    is_section_law = False
     section_dimensions = ()
     section_registry = {}
+
+    def fiber_quadrature(self):
+        """Return physical centroid-relative (y, z, weights) for fiber integration."""
+        raise ValueError(
+            f"No default fiber quadrature for section type {self.section_type!r}; "
+            "provide fibers=(y, z, weights) explicitly"
+        )
 
     @property
     def n_points(self):
@@ -479,7 +519,122 @@ class BeamProperties(ConstitutiveLaw):
         return BeamStrainList(beamstrain).get_strain(self, coordinates)
 
 
+class BeamMesh(BeamProperties):
+    """Beam properties and fiber quadrature from a planar section mesh.
+
+    Pass a 2D ``section_mesh`` with ``tri3``, ``tri6``, ``quad4``, ``quad8``
+    or ``quad9`` elements in physical units. Its coordinate columns correspond
+    to the section's y and z directions. The section is centered at its area
+    centroid. By default the input axes are retained, with a warning if they
+    are not principal axes. Set ``rotate_mesh=True`` to align the section with
+    the closest principal axes for uncoupled elastic bending. ``centroid`` and
+    ``principal_angle`` (the applied rotation in radians) describe the
+    transformation. Orient the beam's local axes accordingly.
+
+    Area and second moments use the element Gauss rules. Supply the
+    Saint-Venant torsion constant ``Jx`` (use 0 for a planar bending model)
+    and, if needed, a transverse shear factor ``k``. The mesh is not used to
+    solve torsional warping or recover torsional stresses. Wrap the section in
+    ``BeamNonLinear`` to use its quadrature points as material fibers.
+    """
+
+    section_type = "mesh"
+    _quadrature = {"tri3": 3, "tri6": 12, "quad4": 4, "quad8": 16, "quad9": 16}
+
+    def __init__(
+        self,
+        material,
+        section_mesh,
+        Jx,
+        k=0,
+        name="",
+        *,
+        output_points=None,
+        rotate_mesh=False,
+    ):
+        if (
+            section_mesh.ndim != 2
+            or not isinstance(section_mesh.elm_type, str)
+            or section_mesh.elm_type not in self._quadrature
+        ):
+            raise ValueError(
+                "Use a 2D section mesh with tri3, tri6, quad4, quad8 or quad9 elements"
+            )
+        if not section_mesh.n_elements:
+            raise ValueError("The section mesh must contain at least one element")
+
+        # Work with a copy so centering and normalization leave the input intact.
+        mesh = section_mesh.deepcopy()
+        n_gp = self._quadrature[mesh.elm_type]
+
+        points = mesh.gausspoint_coordinates(n_gp)
+        weights = mesh._get_gaussian_quadrature_mat(n_gp).diagonal()
+
+        area = weights.sum()
+        self.centroid = weights @ points / area
+        points -= self.centroid
+        moments = points.T @ (weights[:, None] * points)
+        yy, zz, yz = moments[0, 0], moments[1, 1], moments[0, 1]
+        angle = 0.0
+        if abs(yz) > 1e-12 * np.sqrt(yy * zz):
+            angle = 0.5 * np.arctan2(2 * yz, yy - zz)
+            angle = (angle + np.pi / 4) % (np.pi / 2) - np.pi / 4
+        nodes = mesh.nodes - self.centroid
+        if abs(angle) <= 1e-10:  # radians; leave nearly aligned coordinates alone
+            angle = 0.0
+        elif rotate_mesh:
+            c, s = np.cos(angle), np.sin(angle)
+            rotation = np.array([[c, -s], [s, c]])
+            points = points @ rotation
+            nodes = nodes @ rotation
+        else:
+            warnings.warn(
+                "The section mesh axes are misaligned with the principal bending "
+                "axes. Beam results may be inaccurate when bending coupling is "
+                "ignored. Set rotate_mesh=True for automatic correction.",
+                stacklevel=2,
+            )
+            angle = 0.0
+        self.principal_angle = angle
+        y, z = points.T
+        self._fibers = y, z, weights
+
+        used_nodes = nodes[np.unique(mesh.elements)]
+        lower, upper = used_nodes.min(axis=0), used_nodes.max(axis=0)
+        scale = np.maximum(-lower, upper)
+        # Make a fresh mesh so no quadrature cached for physical coordinates
+        # is retained on the normalized mesh used for section display.
+        normalized_mesh = Mesh(nodes / scale, mesh.elements, mesh.elm_type)
+        super().__init__(
+            material,
+            area,
+            Jx,
+            weights @ z**2,
+            weights @ y**2,
+            k,
+            name,
+            section_points=used_nodes / scale,
+            section_mesh=normalized_mesh,
+            section_scale=scale,
+            section_bounds=(lower[0], upper[0], lower[1], upper[1]),
+            output_points=output_points,
+        )
+
+    @property
+    def fibers(self):
+        """Section Gauss points and area weights as ``(y, z, weights)``."""
+        return tuple(values.copy() for values in self._fibers)
+
+    def fiber_quadrature(self):
+        """Use the section mesh's Gauss points and area weights."""
+        return self.fibers
+
+
 class BeamCircular(BeamProperties):
+    def fiber_quadrature(self, *, n_r=3, n_theta=16):
+        """Use n_r radial Gauss points and n_theta equal angular sectors."""
+        return _polar_rule(0.0, self.r, n_r, n_theta)
+
     section_type = "circle"
     section_dimensions = ("r",)
     reference_bounds = (-1.0, 1.0, -1.0, 1.0)
@@ -556,6 +711,10 @@ class BeamCircular(BeamProperties):
 
 
 class BeamPipe(BeamProperties):
+    def fiber_quadrature(self, *, n_r=2, n_theta=16):
+        """Use n_r radial Gauss points and n_theta equal angular sectors."""
+        return _polar_rule(self.r_int, self.r_ext, n_r, n_theta)
+
     section_type = "pipe"
     section_dimensions = ("r_int", "r_ext")
     reference_bounds = (-1.0, 1.0, -1.0, 1.0)
@@ -641,6 +800,15 @@ class BeamPipe(BeamProperties):
 
 
 class BeamRectangular(BeamProperties):
+    def fiber_quadrature(self, *, n_y=4, n_z=4):
+        """Use two Gauss points per layer in each section direction."""
+        _check_quadrature_count(n_y, "n_y")
+        _check_quadrature_count(n_z, "n_z")
+        y, wy = _gauss_layers(-self.a / 2, self.a / 2, n_y)
+        z, wz = _gauss_layers(-self.b / 2, self.b / 2, n_z)
+        y, z = np.meshgrid(y, z, indexing="ij")
+        return y.ravel(), z.ravel(), np.outer(wy, wz).ravel()
+
     section_type = "rectangle"
     section_dimensions = ("a", "b")
     reference_bounds = (-0.5, 0.5, -0.5, 0.5)

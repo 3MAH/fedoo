@@ -795,15 +795,6 @@ def test_start_stress_is_transported_with_the_current_rotation():
 # ---------------------------------------------------------------------------------------------
 
 
-# The total formulation needs a simcoon that provides it (after 2.1); with an older one
-# nlgeom="TL" keeps the log_r rate update.
-_needs_total_formulation = pytest.mark.skipif(
-    not hasattr(simcoon, "total_formulation_serves"),
-    reason="the installed simcoon has no total formulation",
-)
-
-
-@_needs_total_formulation
 def test_total_formulation_tangent_with_plastic_history():
     """Committed plastic shear increments, then the tangent of one more: T is not coaxial
     with U here, so the geometric term T:L and the dual-stress recovery are both loaded.
@@ -850,7 +841,6 @@ def _homogeneous_shear(nlgeom, corate, gamma=0.6, n_inc=12, law="EPICP"):
     return assembly
 
 
-@_needs_total_formulation
 def test_total_formulation_reproduces_the_simcoon_solver():
     """Homogeneous plastic simple shear in TL: the Gauss-point state is the one simcoon's own
     solver integrates under its total formulation, with the same increments."""
@@ -909,7 +899,6 @@ def test_total_formulation_elastic_shear_is_exact_at_any_step():
         )
 
 
-@_needs_total_formulation
 def test_a_modular_material_runs_the_total_formulation_in_tl():
     """A modular J2 material is the EPICP box: in TL it runs the total formulation and gives
     the same stress."""
@@ -920,7 +909,6 @@ def test_a_modular_material_runs_the_total_formulation_in_tl():
     np.testing.assert_allclose(stress, reference, atol=1e-6 * np.abs(reference).max())
 
 
-@_needs_total_formulation
 def test_total_formulation_with_a_local_material_frame_matches_the_simcoon_solver():
     """Orthotropic elasticity with rotated material axes, in simple shear under nlgeom="TL".
     The axes are directions of the reference configuration: the law sees ln U in that frame
@@ -986,7 +974,6 @@ def _polar_rotation(F):
     return F @ N @ np.diag(1.0 / np.sqrt(c)) @ N.T
 
 
-@_needs_total_formulation
 def test_the_two_formulations_read_one_box_differently():
     """Plastic simple shear, where the stress is not coaxial with the stretch. The box and its
     strain are the same in TL (total) and in UL with log_r (rate): its output is T in one and
@@ -1021,7 +1008,6 @@ def test_the_two_formulations_read_one_box_differently():
     assert gap[1] > 0.8 * gap[0]
 
 
-@_needs_total_formulation
 def test_a_law_built_on_F_is_the_same_in_both_formulations():
     """NEOHC is a function of F alone: TL (total) and UL (rate) give the same stress."""
     total = _homogeneous_shear("TL", None, 0.6, 4, law="NEOHC")
@@ -1033,7 +1019,6 @@ def test_a_law_built_on_F_is_the_same_in_both_formulations():
     np.testing.assert_allclose(s_total, s_rate, atol=1e-8 * np.abs(s_rate).max())
 
 
-@_needs_total_formulation
 def test_the_total_lagrangian_method_takes_no_corate():
     with pytest.raises(ValueError, match="no rate"):
         _homogeneous_shear("TL", "log_r", n_inc=1)
@@ -1055,7 +1040,6 @@ def test_a_law_without_the_total_formulation_keeps_the_rate_update_in_tl():
     assert wf.kinematic_form == "rate" and wf.corate == "log_r"
 
 
-@_needs_total_formulation
 def test_log_measures_are_results_of_either_formulation():
     """LogStrainU, LogStrainV and LogStressU express a run in the measures of the other
     formulation: ln V = R ln U R^T, and T is the stress dual to ln U."""
@@ -1089,7 +1073,6 @@ def test_log_measures_are_results_of_either_formulation():
         fd.Problem.get_active().get_results("asm", ["LogStrainU"], "GaussPoint")
 
 
-@_needs_total_formulation
 def test_a_law_simcoon_does_not_serve_keeps_the_rate_update_in_tl():
     """simcoon decides which of its laws run under the total formulation: a small-strain-only
     law (here the SMA model) keeps the log_r rate update in TL instead of being refused."""
@@ -1097,7 +1080,8 @@ def test_a_law_simcoon_does_not_serve_keeps_the_rate_update_in_tl():
     assert fd.constitutivelaw.Simcoon(
         "NEOHC", [1000.0, 5000.0]
     ).supports_total_formulation
-    for name in ("SMADI", "ZENER", "HYPOO"):
+    # ZENER runs the modular engine since simcoon 2.4 and serves it; its dedicated Kelvin kernel does not
+    for name in ("SMADI", "ZENER_closed", "HYPOO"):
         assert not simcoon.total_formulation_serves(name)
 
 

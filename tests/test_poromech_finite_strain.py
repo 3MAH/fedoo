@@ -16,10 +16,11 @@ Checks that:
   * pore pressure builds up under compression (p > 0) then dissipates;
   * the Holmes-Mow permeability actually receives J: k(J_final) < k0.
 
-The test stays at 10% compression: beyond ~12% the UL Newton loop is
-unstable with hyperelastic (``_Lt_from_F``) skeletons — a fedoo-core
-tangent limitation, not a poro one. See the Limitations section of
-docs/poromechanics.rst for the full analysis.
+The test runs at 20% compression. An earlier UL core tangent made the
+coupled Newton loop oscillate beyond ~12%; this level guards against a
+regression. Larger strains with Holmes-Mow reach pore closure (J -> n0 in
+the drained top layer during the transient), which is a model limit, not a
+solver one — see the Limitations section of docs/poromechanics.rst.
 """
 
 import numpy as np
@@ -43,7 +44,7 @@ except ImportError:
 @pytest.mark.skipif(not USE_SIMCOON, reason="simcoon is required for NEOHC")
 def test_finite_strain_consolidation_neohc():
     L = 1.0
-    stretch = 0.9  # 10% confined compression (see module docstring)
+    stretch = 0.8  # 20% confined compression (see module docstring)
     delta = (stretch - 1.0) * L
 
     E = 1.0e6
@@ -136,7 +137,7 @@ def test_finite_strain_consolidation_neohc():
     J_final = np.exp(lnJ)
     k_final = perm(J_final)
     assert np.all(k_final < 0.6 * k0), (
-        "Holmes-Mow permeability must decrease markedly at 10% compression, "
+        "Holmes-Mow permeability must decrease markedly at 20% compression, "
         f"got k/k0 in [{k_final.min() / k0:.3f}, {k_final.max() / k0:.3f}]"
     )
 

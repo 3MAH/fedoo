@@ -1,5 +1,7 @@
 """Plane-stress Simcoon laws: condensed state and return-mapping options."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -106,16 +108,79 @@ def test_default_tangent_mode_follows_the_integrator():
     explicit = law(*PLASTIC, tangent_mode=0, integrator="closest_point")
     assert explicit.tangent_mode == 0
     assert law(*PLASTIC).ncp == "fischer_burmeister"
-    assert law(*PLASTIC).integrator == "cutting_plane"
+    assert law(*PLASTIC).integrator is None  # simcoon's default
 
 
 def test_simcoon_rejects_unsupported_return_mapping_options():
-    # simcoon validates the name of the complementarity function. Which laws
-    # read ncp="min" depends on the simcoon version (2.4 serves the legacy
-    # names, elastic ones included, with its modular engine), so only the
-    # name is checked here.
+    # simcoon validates the names of the complementarity function and of the
+    # integrator. Which laws read ncp="min", and which tangent modes the
+    # closest point takes, depend on the simcoon version (2.4 refuses the
+    # closest point with the continuum tangent, 2.5 accepts it), so only the
+    # names are checked here.
     with pytest.raises(ValueError, match="ncp"):
         _uniaxial_tension(*PLASTIC, ncp="unknown")
-    # the closest-point integrator only returns its algorithmic operator
-    with pytest.raises(ValueError, match="closest_point"):
-        _uniaxial_tension(*PLASTIC, integrator="closest_point", tangent_mode=1)
+    with pytest.raises(ValueError, match="integrator"):
+        _uniaxial_tension(*PLASTIC, integrator="unknown")
+
+
+@pytest.mark.parametrize("laminate", [False, True])
+def test_shell_tangent_follows_the_material_tangent_at_increment_start(laminate):
+    # use_elastic_lt: the material starts each increment from its elastic
+    # tangent, and so does the shell section
+    material = fd.constitutivelaw.Simcoon(*PLASTIC)
+    assert material.use_elastic_lt
+    if laminate:
+        section = fd.constitutivelaw.ShellLaminateNonLinear(
+            [material, fd.constitutivelaw.Simcoon(*PLASTIC)], [0.05, 0.1]
+        )
+    else:
+        section = fd.constitutivelaw.ShellHomogeneousNonLinear(material, 0.15)
+
+    class ShellPoint:
+        n_gauss_points = 1
+        sv = {"ShellStrain": 0}
+
+    point, pb = ShellPoint(), SimpleNamespace(time=0.0, dtime=1.0)
+    section.initialize(point, pb)
+    elastic = point.sv["_ShellStiffnessMatrix"].copy()
+
+    point.sv["ShellStrain"] = [np.array([value]) for value in [0.02] + 7 * [0.0]]
+    section.update(point, pb)
+    assert point.sv["_ShellStiffnessMatrix"][0, 0, 0] < 0.9 * elastic[0, 0, 0]
+    section.set_start(point, pb)
+    np.testing.assert_allclose(point.sv["_ShellStiffnessMatrix"], elastic, rtol=1e-12)
+
+
+def _heterogeneous_tension():
+    """Plane-stress square, plastic left half and elastic right half."""
+    fd.ModelingSpace("2Dstress")
+    mesh = fd.mesh.rectangle_mesh(5, 3, 0, 1, 0, 1, "quad4")
+    left = mesh.find_elements("X < 0.5")
+    right = np.setdiff1d(np.arange(mesh.n_elements), left)
+    material = fd.constitutivelaw.Heterogeneous(
+        (fd.constitutivelaw.Simcoon(*PLASTIC), fd.constitutivelaw.Simcoon(*ELASTIC)),
+        (left, right),
+    )
+    assembly = fd.Assembly.create(fd.weakform.StressEquilibrium(material), mesh)
+    pb = fd.problem.NonLinear(assembly)
+    pb.set_nr_criterion("Displacement", tol=1e-8, max_subiter=10, err0=1)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 0), ["DispX", "DispY"], 0)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 1), "DispX", 0.02)
+    pb.bc.add("Dirichlet", mesh.find_nodes("X", 1), "DispY", 0.01)
+    pb.nlsolve(dt=0.2, tmax=1, update_dt=False, print_info=0)
+    return assembly
+
+
+def test_out_of_plane_warm_start_matches_a_zero_start(monkeypatch):
+    warm = _heterogeneous_tension()
+    assert "_OutOfPlaneDStrainRate" in warm.sv
+    monkeypatch.setattr(
+        fd.core.mechanical3d.MechanicalUMAT,
+        "_out_of_plane_guess",
+        staticmethod(lambda assembly, dtime, shape: 0.0),
+    )
+    cold = _heterogeneous_tension()
+    for key in ("Stress", "Strain"):
+        np.testing.assert_allclose(
+            np.asarray(warm.sv[key]), np.asarray(cold.sv[key]), rtol=1e-8, atol=1e-10
+        )

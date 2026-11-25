@@ -166,8 +166,12 @@ Argument             Meaning
                      ``(4, n_points)``.
 ``temperature``      Gauss-point temperatures, or ``None`` when no
                      temperature field is available.
-``ndi``              Number of direct components: 3 normally and 2 for the
-                     plane-stress interface.
+``ndi``              Number of direct components: 3 normally, 2 in plane
+                     stress (``"2Dstress"``) and 1 in uniaxial stress
+                     (``"1Dstress"``, beam fibers). A callback is only
+                     called with 2 or 1 for the states listed in its
+                     ``reduced_states``; it must then return a stress whose
+                     out-of-state components are zero.
 ``tangent_mode``     User-defined tangent selector forwarded unchanged by
                      Fedoo.
 ``start``            True during initialization; False for every material
