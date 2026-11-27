@@ -5,6 +5,7 @@ from copy import copy
 import numpy as np
 
 from fedoo.core.mechanical3d import Mechanical3D
+from fedoo.constitutivelaw.simcoon_umat import Simcoon
 from fedoo.core.base import InvalidKinematicStateError
 from fedoo.util.voigt_tensors import StressTensorList, StrainTensorList
 from fedoo.weakform._reference import deformation_gradient
@@ -57,13 +58,18 @@ class SimcoonThermoMechanical(Mechanical3D):
         Name of the constitutive law.
     """
 
-    is_isotropic = True
     is_thermomechanical = True
     thermal_storage = "included"
 
     def initialize(self, assembly, pb):
         initialize_thermal_state(self, assembly, pb)
         self._evaluate(assembly, pb, start=True)
+        if self._reference_given:
+            # stress of the initial temperature, from the stress-free state
+            self._evaluate(
+                assembly, pb, False, committed=dict(assembly.sv), from_reference=True
+            )
+            assembly.sv["HeatSource"] = np.zeros(assembly.n_gauss_points)
         self.is_initialized = True
 
     def update(self, assembly, pb):
@@ -123,6 +129,7 @@ class SimcoonThermoMechanical(Mechanical3D):
             )
         super().__init__(density=props[0], name=name)
         self.umat_name = umat_name
+        self.is_isotropic = umat_name in Simcoon._ISOTROPIC_UMATS
         self.props = np.asfortranarray(props[:, None])
         self.n_statev = int(n_statev)
         # None: Simcoon takes the initial temperature of each point as reference
@@ -146,7 +153,9 @@ class SimcoonThermoMechanical(Mechanical3D):
     def get_tangent_matrix(self, assembly, dimension=None):
         return assembly.sv["TangentMatrix"]
 
-    def _evaluate(self, assembly, pb, start, committed=None, frozen=False):
+    def _evaluate(
+        self, assembly, pb, start, committed=None, frozen=False, from_reference=False
+    ):
         import simcoon as sim
 
         finite = "_TM_LogStrain" in assembly.sv
@@ -187,6 +196,10 @@ class SimcoonThermoMechanical(Mechanical3D):
         if frozen:
             state = stress.copy(order="F"), statev.copy(order="F"), wm.copy(), wt.copy()
         temperature_start = temperature if start else assembly.sv["_TM_TempStart"]
+        if self._reference_given and (start or from_reference):
+            # the start call is made at the stress-free temperature
+            temperature_start = np.full(n, self.reference_temperature)
+        temperature_end = temperature_start if start else temperature
         strain_start = strain if start else assembly.sv["_TM_StrainStart"]
         rotation = np.repeat(np.eye(3)[:, :, None], n, axis=2)
         try:
@@ -199,11 +212,11 @@ class SimcoonThermoMechanical(Mechanical3D):
                 self.props,
                 statev,
                 pb.time,
-                0.0 if start else pb.dtime,
+                0.0 if start or from_reference else pb.dtime,
                 wm,
                 wt,
                 temperature_start,
-                temperature - temperature_start,
+                temperature_end - temperature_start,
                 ndi=3,
                 n_threads=1,
                 tangent_mode=self.tangent_mode,
@@ -216,10 +229,6 @@ class SimcoonThermoMechanical(Mechanical3D):
         if frozen:
             # tangents of the next step only: a rate-dependent law must not age
             stress, statev, wm, wt = state
-        if start and self._reference_given:
-            # Simcoon resets statev[0] to the temperature of the start call
-            statev = np.array(statev, order="F")
-            statev[0] = self.reference_temperature
         source = np.asarray(source).reshape(n)
         drde = np.asarray(drde).reshape(6, n)
         drdT = np.asarray(drdT).reshape(n)

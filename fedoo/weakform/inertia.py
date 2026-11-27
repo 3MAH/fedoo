@@ -76,6 +76,8 @@ class RotaryInertia(WeakFormBase):
         If list, defines the inertia along each axis (generally using local
         coordinate system), e.g in 3D:
         [x_rot_inertia, y_rot_inertia, z_rot_inertia]
+        It is the inertia of the reference configuration, also with the
+        updated Lagrangian formulation.
     name : str, optional
         name of the WeakForm
     space : ModelingSpace, optional
@@ -116,10 +118,11 @@ class RotaryInertia(WeakFormBase):
                 self.space.variable("RotZ"),
             ]
         op_rot_vir = [op.virtual if op != 0 else 0 for op in op_rot]
+        weight = reference_volume_weight(assembly)  # reference inertia in UL
 
         return sum(
             [
-                a * b * inertia
+                a * b * (inertia * weight)
                 for (inertia, a, b) in zip(self.rotary_inertia, op_rot_vir, op_rot)
             ]
         )

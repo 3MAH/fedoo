@@ -613,14 +613,19 @@ def test_coupled_material_has_a_single_density():
     assert simcoon_material.set_density(3).density == 3
 
 
-@pytest.mark.parametrize("simcoon", [False, True])
+@pytest.mark.parametrize("simcoon", [False, "ELISO", "ZENER"])
 def test_reference_temperature_stresses_a_clamped_body(simcoon):
     """Initial field at 350 K, stress-free at 293.15 K: sigma = -beta (T - T_ref)."""
     fd.ModelingSpace("3D")
     mesh = fd.mesh.box_mesh(nx=2, ny=2, nz=2, elm_type="hex8")
     if simcoon:
+        viscous = [50, 0.2, 40.0, 20.0] if simcoon == "ZENER" else []
         material = fd.constitutivelaw.SimcoonThermoMechanical(
-            "ELISO", [1, 2, 100, 0.2, 0.001], 1, reference_temperature=293.15
+            simcoon,
+            [1, 2, 100, 0.2, 0.001] + viscous,
+            1,
+            n_statev=8,
+            reference_temperature=293.15,
         )
     else:
         material = fd.constitutivelaw.ElasticIsotrop(
@@ -642,8 +647,15 @@ def test_reference_temperature_stresses_a_clamped_body(simcoon):
     nodes = np.arange(mesh.n_nodes)
     pb.bc.add("Dirichlet", nodes, "Disp", 0)
     pb.bc.add("Dirichlet", nodes, "Temp", 350, start_value=350)
-    pb.nlsolve(dt=0.1, tmax=0.1, print_info=0)
     beta = 100 * 0.001 / (1 - 2 * 0.2)
+    pb.initialize()  # the initial state is already the stressed one
+    initial = np.asarray(assembly.sv["Stress"].asarray())
+    np.testing.assert_allclose(initial[:3], -beta * (350 - 293.15), rtol=1e-10)
+    np.testing.assert_allclose(assembly.sv["HeatSource"], 0, atol=1e-12)
+    pb.nlsolve(dt=0.1, tmax=0.1, print_info=0)
+    if simcoon == "ZENER":  # the stress relaxes: only the initial value is known
+        assert np.all(np.isfinite(assembly.sv["Stress"].asarray()))
+        return
     stress = np.asarray(assembly.sv["Stress"].asarray())
     np.testing.assert_allclose(stress[:3], -beta * (350 - 293.15), rtol=1e-10)
     np.testing.assert_allclose(stress[3:], 0, atol=1e-10)
