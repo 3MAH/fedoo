@@ -115,6 +115,12 @@ semantic versioning.
 
 ### Changed
 
+- Linear transient problems (`fd.problem.Linear` with a time integrator) keep
+  their effective matrix while the time step, the integrator coefficients
+  and the stiffness, mass and damping operators do not change: at constant
+  step, `solve_history` no longer rebuilds it at each increment, and a reused
+  factorization (`set_reuse_factorization(True)`) stays valid. Results are
+  unchanged.
 - Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
   strain increment the material point solves (33, 13, 23) starts from the last solved
   one, that of the previous global iteration, or of the previous increment scaled to

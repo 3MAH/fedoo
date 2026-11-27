@@ -72,6 +72,7 @@ class Linear(Problem):
         self._dynamic_constant_force = None
         self._dynamic_mass_assembly = None
         self._dynamic_storage_data = None
+        self._dynamic_matrix_cache = None  # see _dynamic_update_matrix
         self._output_counter = 0
         self._dynamic_displacement = self._new_vect_dof()
         self._dynamic_velocity = self._new_vect_dof()
@@ -162,13 +163,37 @@ class Linear(Problem):
     def _dynamic_update_matrix(self):
         integrator = self.time_integrator
         dt = self.time_step
+        # kept while dt and the operators do not change, with what is cached
+        # on it (reduced matrix, factorization)
+        coefficients = (
+            dt,
+            integrator.beta,
+            integrator.gamma,
+            integrator.alpha_m,
+            integrator.alpha_f,
+        )
+        operators = (
+            self._dynamic_stiffness,
+            self._dynamic_mass,
+            self._dynamic_damping,
+        )
+        cache = self._dynamic_matrix_cache
+        if (
+            cache is not None
+            and cache[0] == coefficients
+            and all(a is b for a, b in zip(cache[1], operators))
+            and self.get_A() is cache[2]
+        ):
+            return
         a0 = 1.0 / (integrator.beta * dt**2)
         c0 = integrator.gamma / (integrator.beta * dt)
-        self.set_A(
+        A = (
             (1.0 - integrator.alpha_f) * self._dynamic_stiffness
             + (1.0 - integrator.alpha_m) * a0 * self._dynamic_mass
             + (1.0 - integrator.alpha_f) * c0 * self._dynamic_damping
         )
+        self.set_A(A)
+        self._dynamic_matrix_cache = (coefficients, operators, A)
 
     def _dynamic_update_rhs(self):
         integrator = self.time_integrator
@@ -282,6 +307,7 @@ class Linear(Problem):
             # _dynamic_initialized set) would silently run that solve on the
             # static K with carried-over velocity/acceleration.
             self._dynamic_initialized = False
+            self._dynamic_matrix_cache = None
             self._dynamic_force = self._new_vect_dof()
             return
 
