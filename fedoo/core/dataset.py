@@ -27,6 +27,7 @@ import numpy as np
 import json
 import os
 import sys
+import warnings
 from copy import deepcopy
 from zipfile import ZipFile, Path as ZipPath
 from fedoo.core.mesh import Mesh, MultiMesh
@@ -108,6 +109,40 @@ def _array_to_pyvista_data(data: np.ndarray) -> np.ndarray:
     if data.ndim == 1:
         return data
     return data.T
+
+
+def _quadratic_element_edges(grid, nonlinear_subdivision=1, internal_edges=False):
+    """Element edges of a quadratic mesh, for plotting.
+
+    By default only the outer skin is processed: the boundary faces are
+    extracted with ``vtkUnstructuredGridGeometryFilter``, which keeps quadratic
+    faces (a PolyData surface would be linear). Each face is then subdivided on
+    its own, and its boundary gives the curved element edges. With
+    ``internal_edges=True`` every element is processed, which also gives the
+    internal edges (seen with opacity) but is about 10x slower on tet10 meshes.
+    ``nonlinear_subdivision=0`` gives straight edges between corner nodes.
+    """
+    from vtkmodules.vtkFiltersGeometry import vtkUnstructuredGridGeometryFilter
+
+    if internal_edges:
+        # separated cells share no face: all their faces are kept as skin
+        grid = grid.separate_cells()
+    skin_filter = vtkUnstructuredGridGeometryFilter()
+    skin_filter.SetInputData(grid)
+    skin_filter.Update()
+    return (
+        pv.wrap(skin_filter.GetOutput())
+        .separate_cells()
+        .extract_surface(
+            algorithm="dataset_surface", nonlinear_subdivision=nonlinear_subdivision
+        )
+        .extract_feature_edges(
+            boundary_edges=True,
+            feature_edges=False,
+            manifold_edges=False,
+            non_manifold_edges=False,
+        )
+    )
 
 
 def _thicken_plot_mesh(meshplot, elm_type, thickness):
@@ -590,6 +625,8 @@ class DataSet:
         scale: float = 1,
         show: bool = True,
         show_edges: bool = True,
+        edge_subdivision: int = 1,
+        internal_edges: bool = False,
         clim: list[float] | None = None,
         node_labels: bool | list = False,
         element_labels: bool | list = False,
@@ -660,6 +697,21 @@ class DataSet:
 
         show_edges : bool, default = True
             if True, the mesh edges are shown
+
+        edge_subdivision : int, default = 1
+            Only used for quadratic elements. Number of subdivisions used to
+            draw the curved element edges. 0 draws straight edges between
+            corner nodes (linear geometry); n >= 1 splits each edge into
+            :math:`2^n` segments whose vertices lie on the quadratic curve.
+            The default 1 is piecewise linear through the mesh nodes, as the
+            faces are drawn; higher values give smoother edges at a higher
+            cost and emit a warning, as the faces are not refined.
+
+        internal_edges : bool, default = False
+            Only used for quadratic elements. If False, only the edges of the
+            outer skin are computed (fast). If True, the edges of all elements
+            are computed, internal ones included (visible with opacity),
+            which is about 10 times slower on tet10 meshes.
 
         clim : sequence[float], optional
             Sequence of two float to define data boundaries for color bar.
@@ -907,6 +959,8 @@ class DataSet:
                 scale=scale,
                 show=show,
                 show_edges=show_edges,
+                edge_subdivision=edge_subdivision,
+                internal_edges=internal_edges,
                 clim=clim,
                 node_labels=node_labels,
                 element_labels=element_labels,
@@ -1163,10 +1217,15 @@ class DataSet:
         ]:
             # patch to correct edges visualization in 2nd ordre elements
             show_edges = False
-            edges = (
-                mesh_to_show.separate_cells()
-                .extract_surface(nonlinear_subdivision=4)
-                .extract_feature_edges()
+            if edge_subdivision >= 2:
+                warnings.warn(
+                    f"edge_subdivision={edge_subdivision} refines the edges only: "
+                    "the faces stay piecewise linear through the mesh nodes, so "
+                    "the curved edges may not lie exactly on the displayed surface.",
+                    stacklevel=2,
+                )
+            edges = _quadratic_element_edges(
+                mesh_to_show, edge_subdivision, internal_edges
             )
 
         if mesh_to_show.is_empty:
@@ -1431,6 +1490,8 @@ class DataSet:
         scale,
         show,
         show_edges,
+        edge_subdivision,
+        internal_edges,
         clim,
         node_labels,
         element_labels,
@@ -1546,6 +1607,8 @@ class DataSet:
                 scale=scale,
                 show=False,
                 show_edges=show_edges,
+                edge_subdivision=edge_subdivision,
+                internal_edges=internal_edges,
                 clim=clim,
                 node_labels=False,
                 element_labels=element_labels,
