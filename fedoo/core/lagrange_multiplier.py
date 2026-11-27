@@ -71,6 +71,7 @@ class LagrangeMultiplierAssembly(AssemblyBase):
         self._pb = None
         self._registered_pbs = []
         self._equation_dofs = None
+        self._flat_equation_cache = None
         self._equation_coefficients = None
 
     def __repr__(self):
@@ -108,12 +109,11 @@ class LagrangeMultiplierAssembly(AssemblyBase):
                     f"generated leaves are MPCs; got {type(constraint).__name__}."
                 )
             dofs, coefficients, current_values = constraint.get_generated_equations()
-            for dof_row, coefficient_row, value in zip(
-                dofs, coefficients, current_values
-            ):
-                equation_dofs.append(np.asarray(dof_row, dtype=int))
-                equation_coefficients.append(np.asarray(coefficient_row, dtype=float))
-                values.append(value)
+            # one equation per row (rows iterated by numpy, as views)
+            n_rows = min(len(dofs), len(coefficients), len(current_values))
+            equation_dofs.extend(np.asarray(dofs[:n_rows], dtype=int))
+            equation_coefficients.extend(np.asarray(coefficients[:n_rows], dtype=float))
+            values.extend(current_values[:n_rows])
 
         return equation_dofs, equation_coefficients, np.asarray(values, dtype=float)
 
@@ -186,19 +186,29 @@ class LagrangeMultiplierAssembly(AssemblyBase):
             dtype=int,
         )
 
+    @staticmethod
+    def _flat_equations(dofs, coefficients):
+        """The equations as flat arrays: row lengths, dofs and coefficients."""
+        lengths = np.array(
+            [len(row) for row in dofs] + [len(row) for row in coefficients]
+        )
+        if len(dofs) == 0:
+            return lengths, np.empty(0), np.empty(0)
+        return lengths, np.concatenate(dofs), np.concatenate(coefficients)
+
     def _equations_changed(self, dofs, coefficients):
         if self._equation_dofs is None or len(dofs) != len(self._equation_dofs):
             return True
-        return any(
-            not np.array_equal(new_dofs, old_dofs)
-            or not np.array_equal(new_coefficients, old_coefficients)
-            for new_dofs, old_dofs, new_coefficients, old_coefficients in zip(
-                dofs,
+        # all the rows are equal if the row lengths and the concatenated rows are
+        new = self._flat_equations(dofs, coefficients)
+        old = self._flat_equation_cache
+        if old is None or old[0] is not self._equation_dofs:
+            old = (
                 self._equation_dofs,
-                coefficients,
-                self._equation_coefficients,
+                self._flat_equations(self._equation_dofs, self._equation_coefficients),
             )
-        )
+        self._flat_equation_cache = (dofs, new)
+        return not all(np.array_equal(a, b) for a, b in zip(new, old[1]))
 
     def _assemble_matrix(self, pb, n_dof, dofs, coefficients):
         lm_dofs = self._lagrange_dofs(pb)
@@ -285,4 +295,5 @@ class LagrangeMultiplierAssembly(AssemblyBase):
     def reset(self):
         self.delete_global_mat()
         self._equation_dofs = None
+        self._flat_equation_cache = None
         self._equation_coefficients = None
