@@ -578,7 +578,14 @@ def _get_results(
                             )
                     saved_law = type(law).from_section_description(recovery_description)
                     saved_law.material = law.material
-                    value = getattr(saved_law, method_name)(assemb, position=position)
+                    if method_name == "get_stress" and law.is_section_law:
+                        # Nonlinear sections only know their stresses at the
+                        # material points, which are their output points.
+                        value = law.get_stress(assemb, position=position)
+                    else:
+                        value = getattr(saved_law, method_name)(
+                            assemb, position=position
+                        )
                     points = (
                         saved_law.normalized_output_points()
                         if position is None
@@ -732,19 +739,12 @@ def _get_results(
         elif res in _LOG_MEASURES:
             # The measures of one finite-strain formulation read in a run of the other:
             # ln U and ln V from F, and the stress T dual to ln U from the Cauchy stress.
-            if (
-                not _has_state_function_strain(assemb)
-                or "F" not in sv
-                or (
-                    res == "LogStressU" and not hasattr(sim, "total_formulation_serves")
-                )
-            ):
+            if not _has_state_function_strain(assemb) or "F" not in sv:
                 if ignore_missing:
                     continue
                 raise NameError(
                     'Field "{}" is available in finite strain when the strain is a '
-                    'state function of F: nlgeom="TL", or corate "log_r" or "log" '
-                    "(LogStressU needs a simcoon with the total formulation)".format(
+                    'state function of F: nlgeom="TL", or corate "log_r" or "log"'.format(
                         res
                     )
                 )

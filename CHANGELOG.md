@@ -15,24 +15,107 @@ semantic versioning.
   thermal storage and undamped endpoint Newmark compatibility.
 - A Fields Newton criterion with independent absolute/relative residual
   tolerances and optional reference scales per field, including MPC reduction.
+- The default Force criterion checks the displacement and temperature fields
+  separately on a coupled problem (largest relative error of the two), since a
+  single norm over forces and heat flows lets one field hide the other.
 - A monolithic thermal expansion example with analytic and Simcoon variants,
   and documentation of supported modes and remaining finite-strain work.
 - Finite-strain native thermoelasticity in 3D and plane strain, using the
   reference logarithmic energy with either TL or UL mechanical assembly.
   Heat conduction uses TL geometry, pulled-back conductivity and its consistent
   deformation tangent; capacity and sources use reference volume. Includes
-  both coupling blocks and implicit endpoint Newmark mechanics. The Simcoon
-  umat_T adapter remains small strain. Requires Simcoon >=2.3.
-- Independent local-frame overlays in DataSet.plot via local_frame and
-  one-based local_frame_axis, with size, density, placement and legend controls.
+  both coupling blocks and implicit endpoint Newmark mechanics.
+- ``SimcoonThermoMechanical`` runs in finite strain (TL or UL mechanics with a
+  TL heat equation) under Simcoon's total form, and accepts every ``umat_T``
+  law instead of ELISO, EPICP and EPKCP only. ``reference_temperature`` now
+  reaches Simcoon (it was ignored: the initial temperature was always the
+  stress-free one); omitted, the initial temperature is kept. Requires
+  Simcoon >= 2.6.
+
+### Changed
+
+- **`HeatEquation` and `HeatCapacity` take `nlgeom=None` by default** (was
+  `False`). A thermo-mechanical material follows the mechanical geometry and
+  switches to the reference-configuration form in finite strain; an uncoupled
+  thermal material keeps the heat equation of the small-strain case, as
+  before, unless a heat-only assembly is given an `F` field. With
+  `nlgeom=True`/`'TL'` the heat assembly is nonsymmetric (`assume_sym=False`).
+- **Heat and mechanics with different materials emit a `UserWarning`**: the
+  problem is solved without thermo-mechanical coupling terms.
+- The small-strain thermoelastic heat source of the native laws uses the
+  current temperature, as the finite-strain one, instead of the reference
+  temperature: a coupled small-strain problem is nonlinear.
+
+### Fixed
+
+- **A coupled material split over two summed assemblies** now raises
+  `ValueError` instead of silently losing the thermoelastic coupling: sum the
+  weak forms before `Assembly.create`.
+- **`SimcoonThermoMechanical` nonpositive temperature**: a Newton iterate below
+  absolute zero is a failed increment (the time step is reduced) instead of an
+  uncaught `ValueError`; an unset initial `Temp` field stays a `ValueError`,
+  now also for native finite thermoelasticity.
+- **`SimcoonThermoMechanical` heat balance**: the heat of the increment
+  returned by `umat_T` is divided by the time increment, so that the thermal
+  balance no longer depends on `dt`.
+- **`Fields` reference norm** no longer contains the residual of unloaded free
+  DOFs; a relative tolerance alone on a field without reaction nor nodal load
+  raises a clear `ValueError` instead of never converging.
+- **Density of a coupled material**: a density that differs from the one of the
+  attached `ThermalProperties` (or from `props[0]` of
+  `SimcoonThermoMechanical`) raises `ValueError` instead of being overwritten.
+- **Inertia with the updated Lagrangian formulation integrates the reference
+  mass.** The mass matrix was integrated on the updated mesh with the
+  reference density, so the mass followed the volume change (`det F`). The
+  density is now weighted by `dV0/dv`, also in `2Daxi` (reference radius). TL
+  and small strain dynamics are unchanged; UL dynamic results with a volume
+  change do change, and now match the total Lagrangian ones.
+
+### Planned improvements
+
+- **Heat-only `HeatEquation(nlgeom="TL")` keeps a nonsymmetric assembly**
+  (`assume_sym=False`) although its operator is symmetric without a `Disp`
+  variable: only an extra assembly and factorization cost. The option should
+  follow the presence of mechanics in the assembly.
+- **Refactoring left for later**: one shared iterator over the leaf weak forms
+  of an assembly in the core (the walk is written out in `problem`, `time` and
+  `weakform`), the density of a coupled material as a property read from its
+  thermal properties, and shared helpers for the neighbouring
+  thermo-mechanical tests.
+- **Tensor conductivity in finite strain** is pulled back as
+  `J F^-1 k F^-T` with a constant spatial `k`, which is not objective for an
+  anisotropic tensor under large rotations. A material conductivity `k0`
+  convected by the stretch (`J U^-1 k0 U^-1`) is the candidate; isotropic
+  conductivity is not affected.
+
+## [1.2.0] - 2026-11-20
+
+### Added
+
+- Tests of the simcoon ``integrator`` and ``ncp`` options through an assembly
+  (``tests/test_simcoon_integrator_options.py``): the closest point lands on the
+  cutting-plane state, ``ncp="min"`` runs under both integrators, a law without a
+  closest-point update is refused. The ``Simcoon`` docstring follows simcoon 2.4
+  (``"min"`` under the closest point; the refusal raises, nothing falls back).
+- ``Simcoon`` accepts the ``NAME_closed`` names of simcoon 2.4 (the dedicated kernels
+  kept next to the modular default, ``EPICP_closed``, ``ZENER_closed``...): the props
+  and statev layout is the plain name's, the full name goes to ``sim.umat``.
+  ``test_finite_strain_tangent_consistency`` asks ``ZENER_closed`` (not ``ZENER``,
+  served by the modular engine since simcoon 2.4) to refuse the total formulation.
+- Independent local-frame overlays in `DataSet.plot` via `show_local_frame`,
+  with frame selection through `set_current_local_frame`, one-based axis
+  selection through `local_frame_axis`, and density, placement and legend
+  controls through `local_frame_options`. `show_local_frame` accepts a boolean
+  or a size expressed as a percentage of the mesh bounding-box diagonal.
   The viewer uses the same plotting implementation, including mixed-mesh
   visibility. Frame matrix components remain available as ordinary scalar plots
   for matrix, quaternion and rotation-vector inputs.
 - Metadata-driven local-frame fields for arbitrary names (`type: local_frame`),
   with automatic tagging of shell/beam outputs and explicitly requested
   MaterialLocalFrame output for supported mechanical constitutive laws.
-- Rotation-vector FDH5 encoding (`local_frame="rotvec"`, radians), plus shape
-  inference for tagged matrix/quaternion/rotvec inputs. Files record encoding
+- Rotation-vector FDH5 encoding (`fdh5_options={"local_frame": "rotvec"}`,
+  radians), plus shape inference for tagged matrix/quaternion/rotvec inputs.
+  Files record encoding
   explicitly and restore ordinary matrices on reading.
 - Public local frames in the viewer field list with Whole frame / Local 1/2/3
   components, and a frame-field selector for overlays including private frames.
@@ -41,7 +124,7 @@ semantic versioning.
   compression, floating-point precision, lossless integer packing and local-frame encoding.
 - Compact quaternion local frames with repeated Gauss-point frames stored once
   per element, transparent matrix reconstruction, and coloured basis-vector
-  display with axis, placement, size and density controls in Options > Plot.
+  display with axis, placement, size and density controls in Options > Local frames.
 - Expandable vector/tensor fields in the Object inspector, with direct component
   selection using the same labels and invariants as the viewer field controls.
 - Viewer node-set management, conversion between node and element sets, and
@@ -59,9 +142,9 @@ semantic versioning.
   workspace Problems without solving. Live Problems support boundary-condition
   inspection and editing; stored modal/buckling modes use the iteration controls.
   FDH5 export is a snapshot of the selected state or mode, not a solver restart.
-- Optional lossless Zstandard compression for FDH5 through `compressed="zstd"`
-  or `CompressionConfig`, and a `fedoo[zstd]` dependency group. The viewer's
-  Save as dialog offers uncompressed, gzip and Zstandard output with level
+- Optional lossless Zstandard compression for FDH5 through
+  `fdh5_options={"compression": "zstd"}`, and a `fedoo[zstd]` dependency group.
+  The viewer's Save as dialog offers uncompressed, gzip and Zstandard output with level
   selection; Zstandard readers and writers require `hdf5plugin`.
 - Optional current-time annotation under Options > Plot, disabled by default.
 - Automatic consistent tangents with `consistent_tangent=None` for supported
@@ -74,30 +157,52 @@ semantic versioning.
   (positive integer, default 4) to control stagnation-based early rejection
   independently of the tangent-switch and adaptive-stiffness thresholds.
 - FDH5 compression selection through `add_output` and `DataSet.to_fdh5`:
-  `True` uses gzip level 4, `False` disables compression, and integers 0-9
-  select the gzip level. Invalid settings and conflicting settings for
-  registrations sharing an output file are rejected. Appending preserves
+  `fdh5_options` selects the codec and `compression_level` (0-9 for gzip).
+  `compressed=None` uses the configured storage defaults; `False` disables
+  compression, while `True` uses the configured codec or falls back to gzip
+  level 4 if compression is disabled in those defaults. Invalid settings and
+  conflicting settings for registrations sharing an output file are rejected. Appending preserves
   existing datasets and applies the selected compression to new datasets.
 - `Simcoon` and `Simcoon.from_modular` accept the keyword-only options `ncp`
   (`"fischer_burmeister"` default, or `"min"`) and `integrator`
-  (`"cutting_plane"` default, or `"closest_point"`), forwarded to
-  `simcoon.umat` and also available as attributes. `tangent_mode` now defaults
-  to `None`: `1` (continuum) as before, or `2` with
+  (`None` by default, or `"default"`, `"cutting_plane"`, `"closest_point"`).
+  Both are available as attributes; `None` omits the integrator argument to
+  `simcoon.umat`, preserving Simcoon's default, while explicit choices are
+  forwarded. `tangent_mode` now defaults to `None`: `1` (continuum) as before, or `2` with
   `integrator="closest_point"`, which only returns its algorithmic operator.
+- `BeamNonLinear`: nonlinear multifiber beam section. A private copy of a
+  3D material law (e.g. a Simcoon plasticity law) is evaluated under uniaxial
+  stress at fiber points of a rectangular, circular or pipe section, and the
+  normal force, bending moments and their full section tangent are integrated
+  from the fibers. Transverse shear and torsion remain elastic. Works with
+  `BeamEquilibrium` in 2D and 3D, small strain or corotational `nlgeom`,
+  including `consistent_tangent=True`. Saved `Stress` fields are the fiber
+  stresses (`recovery="stored_only"`). A custom section that defines
+  `section_bounds` is accepted with explicit `fibers`; a section given by
+  its properties only (`BeamProperties`) is refused. The `fibers` argument
+  takes explicit `(y, z, weights)` arrays. By default, the beam uses the
+  section's `fiber_quadrature()` method, which also accepts section-specific
+  resolution options for the built-in shapes.
+- `BeamMesh` computes the area and centroidal bending moments of inertia
+  from a 2D section mesh, with optional principal-axis alignment through
+  `rotate_mesh=True`. `BeamNonLinear` can use its Gauss points and weights as
+  fibers. The torsion constant and shear factor are supplied separately.
+- `"1Dstress"` (uniaxial stress) reduced state for mechanical laws, next to
+  `"2Dstress"`: `Mechanical3D.get_H_condensed` statically condenses a 3D
+  tangent onto any set of Voigt components; native elastic laws and UMAT laws
+  (`ndi=1`) support it.
+- `MechanicalUMAT(..., reduced_states=(...))`: a UMAT callback declares the
+  reduced stress states (`"2Dstress"`, `"1Dstress"`) it enforces itself,
+  returning a stress whose out-of-state components are zero.
 
 ### Changed
 
-- **`HeatEquation` and `HeatCapacity` take `nlgeom=None` by default** (was
-  `False`). A thermo-mechanical material follows the mechanical geometry and
-  switches to the reference-configuration form in finite strain; an uncoupled
-  thermal material keeps the heat equation of the small-strain case, as
-  before, unless a heat-only assembly is given an `F` field. With
-  `nlgeom=True`/`'TL'` the heat assembly is nonsymmetric (`assume_sym=False`).
-- **Heat and mechanics with different materials emit a `UserWarning`**: the
-  problem is solved without thermo-mechanical coupling terms.
-- Simplify DataSet frame display to set_current_local_frame, show_local_frame
-  (boolean or mesh-size percentage), local_frame_axis and local_frame_options
-  (max_frames, gauss_points, legend). The viewer uses the same API.
+- Plane stress with a UMAT (`2Dstress`, shell thickness points): the out-of-plane
+  strain increment the material point solves (33, 13, 23) starts from the last solved
+  one, that of the previous global iteration, or of the previous increment scaled to
+  the time step, instead of zero. Fewer law evaluations per point (plane-stress plate,
+  EPICP / EPCHA: -13 % / -20 % on the whole run); results move within the tolerance
+  of the material-point Newton (1e-10).
 - Automatic geometric frames for shells in 3D and lines in 2D/3D when no saved
   frame is available; 2D spaces display two axes. DataSet show_normals uses
   geometric last axes and percentage sizing. Mesh quick-view methods are unchanged.
@@ -113,9 +218,8 @@ semantic versioning.
 - FDH5 result fields now default to float32 storage; coordinates, scalar outputs
   and metadata preserve precision. Use float_dtype=None to preserve result precision.
   Integer packing defaults to a 32-bit minimum and preserves signedness.
-- Released boolean compressed arguments remain supported; unpublished codec/level
-  shortcuts move to fdh5_options. Explicit True falls back to gzip 4 when the
-  configured codec is None. Existing matrix-frame files remain readable.
+- Boolean `compressed` arguments remain supported; codec and level selection
+  use `fdh5_options`. Existing matrix-frame files remain readable.
 - The Object inspector is visible by default and docks only on the left or
   right of a separate result-view
   area, so arranging views does not reposition it. It starts at minimum width;
@@ -129,10 +233,10 @@ semantic versioning.
 - The Object inspector shows generated submesh selections only as mesh entries,
   avoiding duplicate element-set entries. Generated submesh sets remain in the
   set manager and are excluded from FDH5 exports; user-created sets are retained.
-- `add_output` now defaults to `compressed=True`. FDH5 retains its previous
-  default gzip level 4, but honors explicit `False` and integer levels instead
-  of ignoring the option. Other formats supporting the boolean compression
-  option now also default to compressed output.
+- `add_output` now defaults to `compressed=None`, using the configured FDH5
+  storage defaults (gzip level 4 initially) and honoring explicit `False`.
+  Other formats supporting the boolean compression option default to
+  compressed output when the argument is omitted.
 - Automatic beam/shell tangent switching tracks significant improvement
   against a reference error so oscillations do not conceal stagnation. Switching
   resets the progress counters, and adaptive stiffness gets an opportunity to
@@ -140,12 +244,16 @@ semantic versioning.
   remain active when `check_early_divergence=True`.
 - `PoroDarcy` warns and falls back to k(J=1) when a callable permeability is
   used in finite strain without `lnJ`.
-- Require `simcoon>=2.3`. Plane-stress tangents are already condensed by
+- The poromechanics documentation no longer lists the "12 % compression"
+  Newton limit of UL hyperelastic skeletons, which the updated Lagrangian
+  tangent fixes have removed (the `NEOHC` confined column converges up to
+  50 % with a constant permeability). The limitation entry now describes the
+  pore-closure bound `J > 1 - phi_0` of deformation-dependent permeabilities,
+  and `tests/test_poromech_finite_strain.py` runs at 20 % compression.
+- Require `simcoon>=2.4`. Plane-stress tangents are already condensed by
   Simcoon and are no longer condensed a second time by fedoo.
-- Plane-stress UMAT laws (`2Dstress` space, shell thickness points) now store
-  the out-of-plane strain solved by the material point in
-  `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
-  law as the start state of the next increment.
+- Exclude `ipctk==1.6.1` on Linux because its wheel can crash on CPUs without
+  AVX-512. Other platforms retain the `ipctk>=1.6` requirement.
 - Deprecated: setting `corate` on a constitutive law (`ConstitutiveLaw` and
   all subclasses, e.g. `Simcoon`, `ElastoPlasticity`, shell laws) emits a
   `DeprecationWarning`, and will raise an `AttributeError` in a future
@@ -153,7 +261,7 @@ semantic versioning.
   `material.corate = ...` has always been silently ignored.
 - `Simcoon` / `Simcoon.from_modular` docstrings document `tangent_mode` with
   the simcoon >= 2.0 numbering: 0 elastic, 1 continuum (fedoo default),
-  2 algorithmic tangent of the convex cutting plane return mapping (simcoon
+  2 algorithmic tangent of the integrator used (simcoon
   default). Simcoon 2.3 no longer accepts mode 3: the integration algorithm
   is a separate Simcoon setting. The numbering of
   simcoon < 2.0 differs (0 continuum, 1 algorithmic).
@@ -210,10 +318,37 @@ semantic versioning.
 - `fedoo[solver]` installs python-mumps instead of pypardiso on macOS (also
   on Intel Macs, where pypardiso does not work); pypardiso is kept for
   Linux and Windows x86_64.
-
+- The material-point helpers of the nonlinear shells moved to
+  `fedoo.constitutivelaw._material_points`, shared with the beam fibers.
+- Simcoon capabilities are queried directly through `total_formulation_serves`
+  and `condensation_serves`, available in the required Simcoon versions.
+  Compatibility fallbacks for older versions are removed. Hyperelastic
+  Simcoon laws built on F are accepted in
+  `2Dstress` and `1Dstress` when simcoon reports, through
+  `condensation_serves`, that it condenses the state; unsupported laws and
+  formulations raise `NotImplementedError`.
+- UMAT laws in a reduced stress state (`2Dstress`, `1Dstress`) now store the
+  strain of the stress-free components solved by the material point in
+  `assembly.sv["Strain"]` (previously left at zero), and hand it back to the
+  law as the start state of the next increment.
+- A UMAT law is refused in a reduced stress state (`NotImplementedError`)
+  unless it enforces the state: Simcoon laws that simcoon reports as
+  condensed for the formulation in use (rate or total), or callbacks that
+  declare `reduced_states`. Fedoo used to condense the tangent of any UMAT in
+  `2Dstress` while keeping its 3D stress, which is about 35 % too stiff for
+  an isotropic law and inconsistent with the tangent. See Migration.
+- A UMAT law with a material frame is refused in a reduced stress state when
+  the frame is tilted with respect to it (out of the plane in `2Dstress`, off
+  the axis in `1Dstress`), instead of condensing the state in the material
+  frame. Native elastic laws, which condense after the rotation, are
+  unaffected.
+- `Mechanical3D.get_H_plane_stress` now returns a dense array instead of
+  nested lists.
 
 ### Fixed
 
+- Release Pardiso's native factorization memory when factorization reuse is
+  disabled or its context is replaced.
 - Coordinate-only mesh expressions no longer assume element connectivity is
   present, restoring geometry-based element selection in examples such as
   spherical shell compression. Element expressions retain the original mesh's
@@ -300,53 +435,42 @@ semantic versioning.
   residual missed a factor of order J, while the tangent used the current
   mesh. Transient finite-strain consolidation was wrong by about the strain
   level (5 % at 5 % compression), but drained states were not affected.
-- **A coupled material split over two summed assemblies** now raises
-  `ValueError` instead of silently losing the thermoelastic coupling: sum the
-  weak forms before `Assembly.create`.
-- **`SimcoonThermoMechanical` nonpositive temperature**: a Newton iterate below
-  absolute zero is a failed increment (the time step is reduced) instead of an
-  uncaught `ValueError`; an unset initial `Temp` field stays a `ValueError`,
-  now also for native finite thermoelasticity.
-- **`SimcoonThermoMechanical` heat balance**: the heat of the increment
-  returned by `umat_T` is divided by the time increment, so that the thermal
-  balance no longer depends on `dt`.
-- **`Fields` reference norm** no longer contains the residual of unloaded free
-  DOFs; a relative tolerance alone on a field without reaction nor nodal load
-  raises a clear `ValueError` instead of never converging.
-- **Density of a coupled material**: a density that differs from the one of the
-  attached `ThermalProperties` (or from `props[0]` of
-  `SimcoonThermoMechanical`) raises `ValueError` instead of being overwritten.
-- Cartesian UL inertia integrates reference mass, including when the
-  constitutive deformation gradient uses an incompressibility projection.
+- `Mechanical3D.get_H_condensed` and `get_H_plane_stress` are idempotent:
+  a tangent already condensed by the law (zero rows and columns on the
+  condensed slots, as returned by Simcoon >= 2.3 with `ndi < 3`) is kept
+  instead of being divided by a zero block. Simcoon laws in plane stress
+  (shells) and uniaxial stress (beam fibers) returned NaN or a singular
+  matrix with these Simcoon versions; full 3D tangents of older versions
+  are condensed as before. A UMAT law that declares condensing the reduced
+  state itself (`Simcoon`, through `condensation_serves`) now hands its
+  tangent over as returned: fedoo only condenses the tangents of laws that
+  do not. A condensed component without stiffness (zero row and column) is
+  left out of the condensation instead of raising a singular-matrix error.
+- Plane-stress condensation of native elastic laws
+  (`Mechanical3D.get_H_plane_stress`) releases the two transverse shear
+  stresses as well as the normal one. Only the ZZ component was condensed,
+  which is exact for isotropic laws and for orthotropic laws with an axis
+  normal to the plane, and too stiff for a law tilted out of the plane.
+  Results of the former are unchanged.
+- `ShellHomogeneousNonLinear` and `ShellLaminateNonLinear` integrate the
+  shell tangent again when an increment starts. A material that starts each
+  increment from its elastic tangent (`use_elastic_lt`, the default of
+  `Simcoon`) left the shell with the tangent of the last iteration, so the
+  first iteration of an increment did not use the tangent of the material
+  points. Converged results are unchanged; iteration counts may differ.
 
 ### Migration
 
+- A `MechanicalUMAT` callback used in `2Dstress` must enforce plane stress
+  itself (zero ZZ, XZ and YZ stresses) and declare it with
+  `reduced_states=("2Dstress",)`; without the declaration the law is now
+  refused.
 - Remove `material.corate = ...` from scripts (it now warns and was never
   read). To choose
   the objective rate, set `wf.corate` on the `StressEquilibrium` weak form
   (with `nlgeom="UL"`).
 - Update links to gallery pages: example pages moved from numbered folders
   (`examples/01-simple/...`) to topical ones (`examples/basic/...`).
-
-### Planned improvements
-
-- **Heat-only `HeatEquation(nlgeom="TL")` keeps a nonsymmetric assembly**
-  (`assume_sym=False`) although its operator is symmetric without a `Disp`
-  variable: only an extra assembly and factorization cost. The option should
-  follow the presence of mechanics in the assembly.
-- **Refactoring left for later**: one shared iterator over the leaf weak forms
-  of an assembly in the core (the walk is written out in `problem`, `time` and
-  `weakform`), the density of a coupled material as a property read from its
-  thermal properties, and shared helpers for the neighbouring
-  thermo-mechanical tests.
-- **Axisymmetric UL inertia** is not corrected by the reference volume weight
-  used in the Cartesian case: the mass integrated on the updated mesh still
-  follows the volume change. The radial weight must be the reference radius.
-- **Tensor conductivity in finite strain** is pulled back as
-  `J F^-1 k F^-T` with a constant spatial `k`, which is not objective for an
-  anisotropic tensor under large rotations. A material conductivity `k0`
-  convected by the stretch (`J U^-1 k0 U^-1`) is the candidate; isotropic
-  conductivity is not affected.
 
 ## [1.1.0] - 2026-10-14
 

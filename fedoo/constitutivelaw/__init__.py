@@ -70,6 +70,8 @@ These laws should be associated with :py:class:`fedoo.weakform.InterfaceForce`
    BeamCircular
    BeamPipe
    BeamRectangular
+   BeamMesh
+   BeamNonLinear
 
 Shell constitutive laws
 ======================================
@@ -173,13 +175,21 @@ constitutive law.
 
 For shell constitutive laws that support an additional material orientation,
 that orientation is interpreted relative to the geometrical shell frame
-defined on the assembly. Beam constitutive laws currently use isotropic
-materials only, so material orientations are ignored. The assembly element
-frame defines the beam cross-section orientation.
+defined on the assembly.
+
+For beams, the assembly element frame defines the cross-section orientation.
+Linear elastic beam sections use scalar Young's and shear moduli and do not
+use a separate material orientation. :py:class:`BeamNonLinear` instead
+evaluates the material law at each fiber under uniaxial stress, with the first
+axis of the fiber frame along the beam. Any material orientation supported by
+the fiber law is relative to that frame. For anisotropic UMATs, it must preserve
+the beam axis. Transverse shear and torsion still use the initial elastic
+shear modulus.
 
 """
 
-from .beam import BeamCircular, BeamPipe, BeamProperties, BeamRectangular
+from .beam import BeamCircular, BeamMesh, BeamPipe, BeamProperties, BeamRectangular
+from .beam_fiber import BeamNonLinear
 from .cohesivelaw import CohesiveLaw
 from .composite_ud import CompositeUD
 from .elastic_anisotropic import ElasticAnisotropic
@@ -204,6 +214,8 @@ from .thermomechanical import SimcoonThermoMechanical
 
 __all__ = [
     "BeamCircular",
+    "BeamMesh",
+    "BeamNonLinear",
     "BeamPipe",
     "BeamProperties",
     "BeamRectangular",
