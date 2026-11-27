@@ -1636,7 +1636,13 @@ class Mesh(MeshBase):
                     "method='spr'."
                 )
             try:
-                solve = linalg.factorized(mass.tocsc())
+                # Symmetric mass matrix: an ordering of A^T + A in symmetric
+                # mode fills in much less than the default COLAMD.
+                solve = linalg.splu(
+                    mass.tocsc(),
+                    permc_spec="MMD_AT_PLUS_A",
+                    options={"SymmetricMode": True},
+                ).solve
             except RuntimeError as exc:
                 raise ValueError(
                     "L2 GaussPoint to Node conversion failed because the "
@@ -1672,9 +1678,8 @@ class Mesh(MeshBase):
         rhs_data = rhs @ data
         if rhs_data.ndim == 1:
             return solve(rhs_data)
-        return np.column_stack(
-            [solve(rhs_data[:, i]) for i in range(rhs_data.shape[1])]
-        )
+        # all the components in one solve (several right-hand sides)
+        return np.ascontiguousarray(solve(rhs_data))
 
     def _gausspoint_to_node_spr(
         self,

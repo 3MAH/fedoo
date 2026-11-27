@@ -268,5 +268,28 @@ def test_recover_hessian_validates_shape():
         fd.recover_hessian(mesh, np.zeros(mesh.n_nodes - 1))
 
 
+@pytest.mark.parametrize("elm_type", ["hex8", "hex20", "quad4", "quad8", "tri6"])
+def test_l2_projection_solves_the_mass_system(elm_type):
+    if elm_type in ("hex8", "hex20"):
+        mesh = fd.mesh.box_mesh(5, 5, 5, elm_type=elm_type)
+    else:
+        mesh = fd.mesh.rectangle_mesh(7, 5, elm_type=elm_type)
+    n_gp = fd.lib_elements.get_default_n_gp(elm_type)
+    node2gp = mesh._get_node2gausspoint_mat(n_gp)
+    quadrature = mesh._get_gaussian_quadrature_mat(n_gp)
+    mass = (node2gp.T @ quadrature @ node2gp).toarray()
+    data = np.sin(0.7 * np.arange(6 * mesh.n_elements * n_gp)).reshape(-1, 6)
+
+    res = mesh._gausspoint_to_node(data, n_gp, method="l2")
+    expected = np.linalg.solve(mass, node2gp.T @ (quadrature @ data))
+
+    assert res.shape == (mesh.n_nodes, 6) and res.flags.c_contiguous
+    assert np.allclose(res, expected, rtol=1e-11, atol=1e-13)
+    # one component gives the column of the solve with several components
+    single = mesh._gausspoint_to_node(data[:, 2], n_gp, method="l2")
+    assert single.shape == (mesh.n_nodes,)
+    assert np.allclose(single, res[:, 2], rtol=1e-12, atol=1e-14)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
