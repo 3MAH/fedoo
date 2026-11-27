@@ -1,7 +1,7 @@
 import numpy as np
 
 
-from fedoo.lib_elements.element_base import Element2D
+from fedoo.lib_elements.element_base import Element2D, _cached_by_points
 
 
 class ElementQuadrangle(Element2D):
@@ -220,6 +220,7 @@ class Quad8(ElementQuadrangle):
             0.5 * (1 - xi) * (1 - eta**2),
         ]
 
+    @_cached_by_points
     def shape_function_derivative(self, vec_xi):
         return [
             np.array(
@@ -281,6 +282,7 @@ class Quad9(ElementQuadrangle):
             (1 - xi**2) * (1 - eta**2),
         ]
 
+    @_cached_by_points
     def shape_function_derivative(self, vec_xi):
         return [
             np.array(

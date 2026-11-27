@@ -1,6 +1,35 @@
+from functools import wraps
 from itertools import product
 
 import numpy as np
+
+
+def _cached_by_points(method):
+    """Cache the values of a shape function method for the last sets of points.
+
+    Only for methods whose values depend on ``vec_xi`` alone, not on the
+    element instance: elements are built again with the same Gauss points at
+    each computation of the elementary operators. The key is the content of
+    ``vec_xi`` (numeric arrays only); the returned list holds a copy of the
+    cached values.
+    """
+    cache = {}
+
+    @wraps(method)
+    def cached_method(self, vec_xi):
+        if not (isinstance(vec_xi, np.ndarray) and vec_xi.dtype.kind in "fiu"):
+            return method(self, vec_xi)  # the bytes of other inputs are no key
+        key = (vec_xi.dtype.str, vec_xi.shape, vec_xi.tobytes())
+        values = cache.get(key)
+        if values is None:
+            values = np.array(method(self, vec_xi))
+            if len(cache) >= 16:
+                cache.clear()
+            cache[key] = values
+        return list(values.copy())
+
+    cached_method.cache = cache
+    return cached_method
 
 
 def _monomial_exponents(ndim, max_degree):

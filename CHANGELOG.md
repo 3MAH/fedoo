@@ -6,6 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- **Shape function derivatives of `hex8`, `hex20`, `tet10`, `quad8` and
+  `quad9` are kept for the last sets of points.** The elements are built again
+  with the same Gauss points at each computation of the elementary operators
+  (each update with the updated Lagrangian method) and these derivatives were
+  evaluated point by point in Python: about 0.7 ms per call for a `hex20`
+  with 27 points, three calls per update. The values, which depend on the
+  reference coordinates only, are now reused (16 sets of points per element
+  class). Results are unchanged bit for bit; the saving does not depend on the
+  mesh size, so it matters on small meshes.
+
 ## [1.2.0] - 2026-11-20
 
 ### Added
