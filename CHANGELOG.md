@@ -6,6 +6,93 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Initial small-strain thermo-mechanical coupling by summing StressEquilibrium
+  and HeatEquation with a shared material. Native elastic solids accept optional
+  ThermalProperties through ``thermal=`` or ``set_thermal_properties``. Includes
+  an isotropic Simcoon umat_T adapter, both coupling blocks, consistent
+  thermal storage and undamped endpoint Newmark compatibility.
+- A Fields Newton criterion with independent absolute/relative residual
+  tolerances and optional reference scales per field, including MPC reduction.
+- The default Force criterion checks the displacement and temperature fields
+  separately on a coupled problem (largest relative error of the two), since a
+  single norm over forces and heat flows lets one field hide the other. A field
+  whose reactions vanish (free thermal expansion) converges once its residual
+  reaches the round-off level of the assembled fluxes.
+- A monolithic thermal expansion example with analytic and Simcoon variants,
+  and documentation of supported modes and remaining finite-strain work.
+- Finite-strain native thermoelasticity in 3D and plane strain, using the
+  reference logarithmic energy with either TL or UL mechanical assembly.
+  Heat conduction uses TL geometry, pulled-back conductivity and its consistent
+  deformation tangent; capacity and sources use reference volume. Includes
+  both coupling blocks and implicit endpoint Newmark mechanics.
+- ``SimcoonThermoMechanical`` runs in finite strain (TL or UL mechanics with a
+  TL heat equation) under Simcoon's total form, and accepts every ``umat_T``
+  law instead of ELISO, EPICP and EPKCP only. ``reference_temperature`` now
+  reaches Simcoon (it was ignored: the initial temperature was always the
+  stress-free one); omitted, the initial temperature is kept. The evaluations
+  made when a step is committed or rolled back no longer advance the state of
+  the law, which a rate-dependent law would integrate twice. Requires
+  Simcoon >= 2.6.
+
+### Changed
+
+- **`HeatEquation` and `HeatCapacity` take `nlgeom=None` by default** (was
+  `False`). A thermo-mechanical material follows the mechanical geometry and
+  switches to the reference-configuration form in finite strain; an uncoupled
+  thermal material keeps the heat equation of the small-strain case, as
+  before, unless a heat-only assembly is given an `F` field. With
+  `nlgeom=True`/`'TL'` the heat assembly is nonsymmetric (`assume_sym=False`).
+- **Heat and mechanics with different materials emit a `UserWarning`**: the
+  problem is solved without thermo-mechanical coupling terms.
+- The small-strain thermoelastic heat source of the native laws uses the
+  current temperature, as the finite-strain one, instead of the reference
+  temperature: a coupled small-strain problem is nonlinear.
+
+### Fixed
+
+- **A coupled material split over two summed assemblies** now raises
+  `ValueError` instead of silently losing the thermoelastic coupling: sum the
+  weak forms before `Assembly.create`.
+- **`SimcoonThermoMechanical` nonpositive temperature**: a Newton iterate below
+  absolute zero is a failed increment (the time step is reduced) instead of an
+  uncaught `ValueError`; an unset initial `Temp` field stays a `ValueError`,
+  now also for native finite thermoelasticity.
+- **`SimcoonThermoMechanical` heat balance**: the heat of the increment
+  returned by `umat_T` is divided by the time increment, so that the thermal
+  balance no longer depends on `dt`.
+- **`Fields` reference norm** no longer contains the residual of unloaded free
+  DOFs; a relative tolerance alone on a field without reaction nor nodal load
+  raises a clear `ValueError` instead of never converging.
+- **Density of a coupled material**: a density that differs from the one of the
+  attached `ThermalProperties` (or from `props[0]` of
+  `SimcoonThermoMechanical`) raises `ValueError` instead of being overwritten.
+- **Inertia with the updated Lagrangian formulation integrates the reference
+  mass.** The mass matrix was integrated on the updated mesh with the
+  reference density, so the mass followed the volume change (`det F`). The
+  density is now weighted by `dV0/dv`, also in `2Daxi` (reference radius). TL
+  and small strain dynamics are unchanged; UL dynamic results with a volume
+  change do change, and now match the total Lagrangian ones. The rotary
+  inertia of beams and shells is weighted in the same way.
+
+### Planned improvements
+
+- **Heat-only `HeatEquation(nlgeom="TL")` keeps a nonsymmetric assembly**
+  (`assume_sym=False`) although its operator is symmetric without a `Disp`
+  variable: only an extra assembly and factorization cost. The option should
+  follow the presence of mechanics in the assembly.
+- **Refactoring left for later**: one shared iterator over the leaf weak forms
+  of an assembly in the core (the walk is written out in `problem`, `time` and
+  `weakform`), the density of a coupled material as a property read from its
+  thermal properties, and shared helpers for the neighbouring
+  thermo-mechanical tests.
+- **Tensor conductivity in finite strain** is pulled back as
+  `J F^-1 k F^-T` with a constant spatial `k`, which is not objective for an
+  anisotropic tensor under large rotations. A material conductivity `k0`
+  convected by the stretch (`J U^-1 k0 U^-1`) is the candidate; isotropic
+  conductivity is not affected.
+
 ## [1.2.0] - 2026-11-20
 
 ### Added

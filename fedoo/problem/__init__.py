@@ -314,7 +314,7 @@ Available Convergence Criteria
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can define how the solver determines convergence via :meth:`NonLinear.set_nr_criterion`.
-Three criteria are available:
+Four criteria are available:
 
 * **Force** (default): Measures the residual (out-of-balance) forces relative to the
   current total force norm, recomputed at each Newton iteration.
@@ -322,6 +322,9 @@ Three criteria are available:
   initial increment of the step.
 * **Work**: Evaluates the energy (dot product of displacement and residual) relative to
   the initial work increment.
+* **Fields**: Checks the residual of each field (``Disp``, ``Temp``, ...) against its
+  own absolute and relative tolerances. Intended for coupled problems whose fields
+  have different units.
 
 Key Newton-Raphson Parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

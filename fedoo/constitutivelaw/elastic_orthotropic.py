@@ -27,6 +27,9 @@ class ElasticOrthotropic(ElasticAnisotropic):
         Shear modulus
     nuYZ, nuXZ, nuXY: scalars or arrays of gauss point values
         Poisson's ratio
+    thermal: ThermalProperties, optional
+        Optional thermal properties; expansion coefficients and conductivity
+        are expressed in global axes in the initial coupled implementation.
 
     Notes
     -----
@@ -36,7 +39,9 @@ class ElasticOrthotropic(ElasticAnisotropic):
     :class:`fedoo.core.mechanical3d.Mechanical3D` for details.
     """
 
-    def __init__(self, Ex, Ey, Ez, Gyz, Gxz, Gxy, nuyz, nuxz, nuxy, name=""):
+    def __init__(
+        self, Ex, Ey, Ez, Gyz, Gxz, Gxy, nuyz, nuxz, nuxy, name="", *, thermal=None
+    ):
         Mechanical3D.__init__(self, name=name)  # heritage
 
         self.Ex = Ex
@@ -48,6 +53,8 @@ class ElasticOrthotropic(ElasticAnisotropic):
         self.nuyz = nuyz
         self.nuxz = nuxz
         self.nuxy = nuxy
+        if thermal is not None:
+            self.set_thermal_properties(thermal)
 
     def get_tangent_matrix(self, assembly, dimension=None):
         if dimension is None:
