@@ -3,7 +3,7 @@
 import numpy as np
 
 from fedoo.core.base import InvalidKinematicStateError
-from fedoo.core.time_evolution import SECOND_ORDER
+from fedoo.core.time_evolution import FIRST_ORDER, SECOND_ORDER
 from fedoo.util.voigt_tensors import StrainTensorList
 
 
@@ -81,10 +81,6 @@ def initialize_thermal_state(material, assembly, pb):
         and "DispX" not in assembly.space.list_variables()
         and getattr(assembly, "_thermal_nlgeom", None) is not False
     )
-    if finite and getattr(material, "thermal", None) is None:
-        raise NotImplementedError(
-            "Simcoon thermo-mechanical materials currently require small strain."
-        )
     if finite and getattr(assembly, "_corate", None) not in (None, "log", "log_r"):
         raise NotImplementedError(
             "Finite thermoelasticity uses the total logarithmic energy; use log_r."
@@ -116,6 +112,10 @@ def initialize_thermal_state(material, assembly, pb):
         raise ValueError("Thermo-mechanical coupling requires nonsymmetric assembly.")
     assembly.assume_sym = False
     strain, temperature = thermal_fields(material, assembly, pb, initial=not finite)
+    coupling = getattr(getattr(material, "thermal", None), "coupling", False)
+    if not finite and coupling and FIRST_ORDER in pb.time_integrators:
+        # the thermoelastic source is proportional to the absolute temperature
+        check_absolute_temperature(temperature, initial=True)
     if finite:
         import simcoon as sim
 
@@ -132,6 +132,7 @@ def initialize_thermal_state(material, assembly, pb):
         F = deformation_gradient(assembly)[0]
         strain = sim.Log_strain(np.asfortranarray(F.transpose(1, 0, 2)), True, False)
         assembly.sv["_TM_LogStrain"] = strain
+        assembly.sv["_TM_FStart"] = np.array(F, order="F")
     else:
         assembly.sv["Strain"] = StrainTensorList(strain)
     assembly.sv["Temp"] = temperature
@@ -144,3 +145,5 @@ def commit_thermal_fields(assembly):
         assembly.sv.get("_TM_LogStrain", assembly.sv["Strain"])
     ).copy()
     assembly.sv["_TM_TempStart"] = np.asarray(assembly.sv["Temp"]).copy()
+    if "_TM_FStart" in assembly.sv:
+        assembly.sv["_TM_FStart"] = np.array(assembly.sv["F"], order="F")

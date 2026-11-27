@@ -1,3 +1,5 @@
+import numpy as np
+
 from fedoo.core.weakform import WeakFormBase
 from fedoo.weakform._axi_utils import axi_volume_weight
 from fedoo.weakform._reference import reference_volume_weight
@@ -14,7 +16,9 @@ class Inertia(WeakFormBase):
     density : scalar or arrays of gauss point values.
         Material density. For 1D meshes, this is physically a linear density
         (mass per unit of length) and for 2D meshes an area density (mass per
-        unit of surface).
+        unit of surface). It is the density of the reference configuration:
+        with the updated Lagrangian formulation the mass is still integrated
+        on the reference volume.
     name : str, optional
         name of the WeakForm
     space : ModelingSpace, optional
@@ -38,13 +42,22 @@ class Inertia(WeakFormBase):
         op_dU = self.space.op_disp()  # displacement increment (incremental formulation)
         op_dU_vir = [du.virtual if du != 0 else 0 for du in op_dU]
 
-        density = self.density
-        if not self.space.is_axisymmetric:
-            density = density * reference_volume_weight(assembly)
+        # mass of the reference configuration, also on the updated mesh (UL)
+        density = self.density * reference_volume_weight(assembly)
         diff_op = sum([a * b * density for (a, b) in zip(op_dU_vir, op_dU)])
 
         if self.space.is_axisymmetric:
-            diff_op = diff_op * axi_volume_weight(assembly)
+            reference = getattr(assembly, "_reference_assembly", None)
+            if reference is None:
+                diff_op = diff_op * axi_volume_weight(assembly)
+            else:  # 2 pi R on the reference mesh
+                radius = reference.mesh.convert_data(
+                    reference.mesh.nodes[:, 0],
+                    "Node",
+                    "GaussPoint",
+                    n_elm_gp=assembly.n_elm_gp,
+                )
+                diff_op = diff_op * (2 * np.pi * radius)
 
         return diff_op
 

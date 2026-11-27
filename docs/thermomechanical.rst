@@ -66,7 +66,7 @@ through ``set_density`` raises ``ValueError``. Unattached elastic laws retain
 their mechanical behavior, including their existing finite-strain support.
 
 Thermal properties enable thermal expansion and reversible mechanical feedback
-into heat, linearized around ``reference_temperature``. Specific heat is the
+into heat, evaluated at the current temperature. Specific heat is the
 capacity per unit mass at fixed strain. Conductivity may be a constant scalar
 or a symmetric positive-semidefinite 3x3 tensor in current global axes. ``alpha`` may be
 a scalar for isotropic expansion, three normal coefficients, or six engineering
@@ -86,18 +86,41 @@ problems remain user-managed; there is no staggered driver yet.
         "ELISO", [rho, cp, E, nu, alpha], thermal_conductivity=k,
     )
 
-These are the *thermal* UMAT properties, not the mechanical UMAT layout. ELISO
-uses one state variable. EPICP and EPKCP require explicit ``n_statev`` values
-(at least 8 and 14 respectively) and the corresponding kernel properties.
+These are the *thermal* UMAT properties, not the mechanical UMAT layout: the
+first two are always the reference density and the specific heat. Every law of
+``umat_T`` is accepted (ELISO, ELIST, ELORT, EPICP, EPKCP, EPJCK, ZENER, ZENNK,
+PRONK and the shape memory alloy laws). ELISO uses one state variable; the
+other laws require an explicit ``n_statev`` (at least 8 for EPICP and 14 for
+EPKCP) and the corresponding kernel properties.
 Initialization uses ``start=True`` once; trial evaluations use ``start=False``,
-including the first increment at time zero. This requires a Simcoon version
-whose Python ``umat_T`` binding exposes ``start`` and ``StepCut``.
+including the first increment at time zero.
+
+Simcoon takes the temperature of each point at initialization as the
+stress-free reference. Give ``reference_temperature`` (in kelvin) to set
+another one: a body initialized at a different temperature is then stressed if
+it cannot expand, as with the native laws.
+
+In finite strain (``StressEquilibrium(material, nlgeom="TL")`` or ``"UL"``
+with ``HeatEquation(material, nlgeom="TL")``) the law runs under Simcoon's
+total form: it works on the material logarithmic strain ``ln U`` and its dual
+stress, so that ``alpha`` is a logarithmic expansion coefficient and ELISO is
+the Hencky model of the native laws. Simcoon returns ``dS/dE``, ``dS/dT`` and
+``dr/dE`` at fixed deformation gradient, converted for UL mechanics; the heat
+stays per unit reference volume. Anisotropy axes are those of the global
+frame and are not convected.
 
 The Simcoon local thermal balance already includes capacity. Its HeatEquation
 therefore has no additional HeatCapacity term. Attach FIRST_ORDER/BackwardEuler
 to declare transient thermal evolution; the local discretization remains owned
 by the UMAT. Kernel thermal/cross tangents are used as supplied and can be
 continuum rather than exact algorithmic derivatives.
+
+The capacity of a Simcoon law (``props[1]``) is the one at constant stress,
+:math:`c_\sigma`, while ``specific_heat`` of the native laws is the one at
+constant strain, :math:`c_\varepsilon`. For an isotropic solid of bulk modulus
+:math:`K` and linear expansion :math:`\alpha`,
+:math:`c_\sigma = c_\varepsilon + 9 K \alpha^2 T / \rho`: convert the value
+when comparing the two families on the same material.
 
 Native elastic materials instead use BackwardEuler and consistent HeatCapacity.
 Both displacement-temperature blocks are assembled, and the global matrix is
@@ -150,7 +173,8 @@ Finite-strain reversible feedback uses actual absolute temperature::
 
 Its deformation and temperature derivatives are assembled. This corresponds
 to constant specific heat at fixed logarithmic strain. The small-strain model
-retains feedback linearized at ``T_ref``. ``coupling=False`` disables this
+uses the same source with the small strain, also at the current temperature:
+a coupled small-strain problem is therefore nonlinear. ``coupling=False`` disables this
 feedback in either formulation. Positive absolute temperature is required.
 
 The native example accepts ``--nlgeom TL`` or ``--nlgeom UL``. Both use TL heat
@@ -175,8 +199,20 @@ has a zero reference, and a relative tolerance alone then raises
 
 The maximum normalized field error must be below one; the scalar ``tol`` or
 ``tol_nr`` does not set the Fields residual threshold. It still bounds the
-residual of nonlinear constraints such as ``MeanMotion``. Other criteria retain
-their existing behavior. ``pb.nr_errors`` reports the latest per-field errors.
+residual of nonlinear constraints such as ``MeanMotion``. ``pb.nr_errors``
+reports the latest per-field errors.
+
+The default ``Force`` criterion is also evaluated field by field when the
+problem has displacement and temperature unknowns: the error is the largest of
+the two residual norms, each divided by the reactions and loads of its own
+field, and it is compared to ``tol``. A field without reaction nor load takes a
+unit reference, as ``Force`` always did: ``tol`` is then an absolute tolerance
+for that field, and ``Fields`` with an explicit ``atol`` is the better choice.
+A field whose reactions vanish at the solution (free thermal expansion on
+isostatic supports) converges once its residual reaches the round-off level of
+the assembled fluxes.
+With other free unknowns (rotations, global DOFs) or an MPC mixing the two
+fields, ``Force`` keeps its single norm.
 Fields must cover every free DOF, including global DOFs, without overlaps.
 MPC forces are reduced before checking the master DOFs of each field. Constraints
 that mix fields with different units are not a supported convergence partition.
@@ -185,10 +221,9 @@ Current limits
 --------------
 
 Static mechanics and undamped endpoint Newmark mechanics can be combined with
-the thermal solve. The Simcoon ``umat_T`` adapter remains small strain pending
-its finite-strain constitutive audit and interface changes. Plane stress,
+the thermal solve. Plane stress,
 axisymmetry, incompressibility projections, material-frame transformations, damped coupled mechanics and
 generalized-alpha away from the endpoint are not yet supported. These modes
 raise explicit errors rather than silently dropping coupling terms. A staggered
-coupling driver remains a subsequent step. Finite thermoelasticity uses the
-Simcoon conversion API (Simcoon 2.3 is the package minimum).
+coupling driver remains a subsequent step. Finite thermoelasticity and the
+finite-strain ``umat_T`` call require Simcoon 2.6.

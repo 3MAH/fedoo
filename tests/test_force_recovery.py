@@ -76,6 +76,7 @@ def test_force_reference_updates_and_zero_reference_checks_residual():
         _err0=None,
         get_ext_forces=lambda **kw: np.array([0.0]),
         _get_free_dof_residual=lambda: np.array([1.0]),
+        _force_errors_by_field=lambda: None,  # a single field
     )
     assert fd.problem.NonLinear.compute_nr_error(pb) == 1.0
     assert pb._err0 is None  # fallback must not become the force reference
